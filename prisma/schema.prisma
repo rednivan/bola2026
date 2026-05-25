@@ -1,0 +1,312 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── ENUMS ──────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  PLAYER
+  ADMIN
+}
+
+enum Stage {
+  GROUP
+  R32
+  R16
+  QF
+  SF
+  THIRD_PLACE
+  FINAL
+}
+
+enum PredictionStatus {
+  DRAFT
+  GROUP_COMPLETE
+  COMPLETE
+}
+
+enum Confederation {
+  UEFA
+  CONMEBOL
+  CONCACAF
+  CAF
+  AFC
+  OFC
+}
+
+// ─── USERS ──────────────────────────────────────────────────────────────────
+
+// id maps 1:1 with Supabase auth.users UUID
+model User {
+  id          String   @id
+  email       String   @unique
+  displayName String
+  avatarUrl   String?
+  role        UserRole @default(PLAYER)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  predictions       Prediction[]
+  createdLeagues    League[]           @relation("LeagueCreator")
+  pushSubscriptions PushSubscription[]
+}
+
+// ─── TOURNAMENT ──────────────────────────────────────────────────────────────
+
+model Tournament {
+  id   String @id @default(cuid())
+  name String
+  year Int    @unique
+  host String
+
+  // Window 1 closes (group predictions lock)
+  groupStageStart DateTime
+  // Window 2 opens (KO predictions can be updated)
+  groupStageEnd DateTime
+  // Window 2 closes (KO predictions lock)
+  knockoutStageStart DateTime
+
+  totalTeams  Int @default(48)
+  totalGroups Int @default(12)
+
+  createdAt DateTime @default(now())
+
+  groups      TournamentGroup[]
+  matches     Match[]
+  predictions Prediction[]
+  leagues     League[]
+}
+
+// ─── TEAMS & GROUPS ──────────────────────────────────────────────────────────
+
+model Team {
+  id            String        @id @default(cuid())
+  name          String        @unique
+  code          String        @unique @db.Char(3)
+  flagUrl       String
+  confederation Confederation
+  fifaRanking   Int?
+
+  groupMemberships        GroupTeam[]
+  homeMatches             Match[]                   @relation("HomeTeam")
+  awayMatches             Match[]                   @relation("AwayTeam")
+  wonMatches              Match[]                   @relation("MatchWinner")
+  predictedWinnerInMatches MatchPrediction[]         @relation("PredictedWinner")
+  standingPredictions     GroupStandingPrediction[]
+}
+
+model TournamentGroup {
+  id           String     @id @default(cuid())
+  tournamentId String
+  letter       String     @db.Char(1)
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  teams                 GroupTeam[]
+  matches               Match[]
+  standingPredictions   GroupStandingPrediction[]
+  // A record here means: user predicts this group's 3rd-place team advances
+  thirdPlacePredictions ThirdPlacePrediction[]
+
+  @@unique([tournamentId, letter])
+}
+
+model GroupTeam {
+  groupId String
+  teamId  String
+  group   TournamentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  team    Team            @relation(fields: [teamId], references: [id])
+
+  @@id([groupId, teamId])
+}
+
+// ─── MATCHES ─────────────────────────────────────────────────────────────────
+
+model Match {
+  id          String  @id @default(cuid())
+  tournamentId String
+  stage       Stage
+  groupId     String?
+  matchNumber Int
+
+  kickoff  DateTime
+  stadium  String
+
+  // Resolved once group stage ends; null for KO matches until teams known
+  homeTeamId String?
+  awayTeamId String?
+
+  // Human-readable placeholder for KO bracket display, e.g. "W73", "1A", "3rd-ABCD"
+  homeTeamPlaceholder String?
+  awayTeamPlaceholder String?
+
+  // Actual result — populated by admin/cron after match played
+  homeScore Int?
+  awayScore Int?
+  isDraw    Boolean?
+  winnerId  String?
+
+  // Points available per correct prediction at this stage
+  pointsAvailable Int
+
+  tournament Tournament       @relation(fields: [tournamentId], references: [id])
+  group      TournamentGroup? @relation(fields: [groupId], references: [id])
+  homeTeam   Team?            @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam   Team?            @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  winner     Team?            @relation("MatchWinner", fields: [winnerId], references: [id])
+
+  matchPredictions MatchPrediction[]
+  jokerPicks       JokerPick[]
+
+  @@unique([tournamentId, matchNumber])
+}
+
+// ─── PREDICTIONS ─────────────────────────────────────────────────────────────
+
+model Prediction {
+  id           String           @id @default(cuid())
+  userId       String
+  tournamentId String
+  name         String
+  status       PredictionStatus @default(DRAFT)
+
+  // Set true when group stage starts — group predictions frozen
+  groupLocked Boolean @default(false)
+  // Set true when KO stage starts — all predictions frozen
+  koLocked    Boolean @default(false)
+
+  totalScore    Int   @default(0)
+  matchAccuracy Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id])
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+
+  standingPredictions   GroupStandingPrediction[]
+  matchPredictions      MatchPrediction[]
+  thirdPlacePredictions ThirdPlacePrediction[]
+  jokerPicks            JokerPick[]
+  leagueMemberships     LeagueMembership[]
+
+  @@unique([userId, tournamentId, name])
+}
+
+// Predicted final group standings: which position (1-4) does each team finish?
+model GroupStandingPrediction {
+  id                String @id @default(cuid())
+  predictionId      String
+  groupId           String
+  teamId            String
+  predictedPosition Int    // 1 = top, 4 = bottom
+  pointsEarned      Int    @default(0)
+
+  prediction Prediction      @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  group      TournamentGroup @relation(fields: [groupId], references: [id])
+  team       Team            @relation(fields: [teamId], references: [id])
+
+  @@unique([predictionId, groupId, teamId])
+}
+
+// Predicted winner (or draw) for a single match, across all stages
+model MatchPrediction {
+  id                String  @id @default(cuid())
+  predictionId      String
+  matchId           String
+  predictedWinnerId String? // null means draw predicted
+  isDraw            Boolean @default(false) // only valid for GROUP stage matches
+  pointsEarned      Int     @default(0)
+
+  prediction      Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  match           Match      @relation(fields: [matchId], references: [id])
+  predictedWinner Team?      @relation("PredictedWinner", fields: [predictedWinnerId], references: [id])
+
+  @@unique([predictionId, matchId])
+}
+
+// Which 8 of the 12 group 3rd-place teams does the user predict will advance?
+// One record per group the user selects — max 8 records per prediction.
+model ThirdPlacePrediction {
+  id           String @id @default(cuid())
+  predictionId String
+  groupId      String
+  pointsEarned Int    @default(0)
+
+  prediction Prediction      @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  group      TournamentGroup @relation(fields: [groupId], references: [id])
+
+  @@unique([predictionId, groupId])
+}
+
+// Wildcard: one match per tournament stage where points are doubled
+model JokerPick {
+  id           String @id @default(cuid())
+  predictionId String
+  matchId      String
+  stage        Stage
+
+  prediction Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  match      Match      @relation(fields: [matchId], references: [id])
+
+  // One joker per stage per prediction
+  @@unique([predictionId, stage])
+}
+
+// ─── LEAGUES ─────────────────────────────────────────────────────────────────
+
+model League {
+  id           String   @id @default(cuid())
+  tournamentId String
+  name         String
+  creatorId    String
+  joinCode     String   @unique @db.Char(6)
+  isPublic     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  tournament  Tournament         @relation(fields: [tournamentId], references: [id])
+  creator     User               @relation("LeagueCreator", fields: [creatorId], references: [id])
+  memberships LeagueMembership[]
+}
+
+model LeagueMembership {
+  id           String   @id @default(cuid())
+  leagueId     String
+  predictionId String
+  joinedAt     DateTime @default(now())
+  currentRank  Int      @default(0)
+
+  league      League               @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  prediction  Prediction           @relation(fields: [predictionId], references: [id])
+  rankHistory LeagueRankSnapshot[]
+
+  @@unique([leagueId, predictionId])
+}
+
+// One snapshot per match played — drives the leaderboard history chart
+model LeagueRankSnapshot {
+  id                 String   @id @default(cuid())
+  leagueMembershipId String
+  rank               Int
+  totalScore         Int
+  snapshotAt         DateTime @default(now())
+
+  membership LeagueMembership @relation(fields: [leagueMembershipId], references: [id], onDelete: Cascade)
+}
+
+// ─── PUSH NOTIFICATIONS ──────────────────────────────────────────────────────
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
