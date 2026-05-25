@@ -80,7 +80,7 @@ export async function login(
   redirect("/dashboard")
 }
 
-export async function loginWithGoogle(): Promise<AuthState> {
+export async function loginWithGoogle(_formData: FormData): Promise<void> {
   const supabase = await createClient()
 
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -90,10 +90,8 @@ export async function loginWithGoogle(): Promise<AuthState> {
     },
   })
 
-  if (error) return { error: error.message }
+  if (error) redirect("/login?error=oauth_failed")
   if (data.url) redirect(data.url)
-
-  return {}
 }
 
 export async function logout() {

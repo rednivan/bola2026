@@ -2,13 +2,13 @@
 
 import { useActionState } from "react"
 import Link from "next/link"
-import { login, loginWithGoogle } from "@/lib/actions/auth"
+import { login, loginWithGoogle, type AuthState } from "@/lib/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 
-const initialState = {}
+const initialState: AuthState = {}
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState(login, initialState)
