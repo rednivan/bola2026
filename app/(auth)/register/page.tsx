@@ -14,55 +14,59 @@ export default function RegisterPage() {
   const [state, action, pending] = useActionState(register, initialState)
 
   return (
-    <Card className="border-green-800 bg-green-950/80 backdrop-blur text-white">
-      <CardHeader className="text-center">
-        <div className="text-4xl mb-2">⚽</div>
-        <CardTitle className="text-2xl text-white">Join Bola 2026</CardTitle>
-        <CardDescription className="text-green-300">
+    <Card className="border-[#1E2B6E] bg-[#0D1333] text-white shadow-2xl shadow-[#2A398D]/20">
+      <CardHeader className="text-center pb-4">
+        <div className="flex justify-center mb-3">
+          <div className="w-16 h-16 rounded-full bg-[#2A398D] flex items-center justify-center shadow-lg shadow-[#E61D25]/20 border border-[#3D4FA0]">
+            <span className="text-3xl">⚽</span>
+          </div>
+        </div>
+        <CardTitle className="text-2xl text-white font-bold tracking-tight">Join Bola 2026</CardTitle>
+        <CardDescription className="text-[#D1D4D1]">
           Create your account and start predicting
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
         {state?.error && (
-          <p className="text-sm text-red-400 bg-red-950/50 px-3 py-2 rounded-md">
+          <p className="text-sm text-white bg-[#E61D25]/20 border border-[#E61D25]/50 px-3 py-2 rounded-md">
             {state.error}
           </p>
         )}
 
         <form action={action} className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="displayName" className="text-green-200">Display name</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="displayName" className="text-[#D1D4D1]">Display name</Label>
             <Input
               id="displayName"
               name="displayName"
               placeholder="How friends will see you"
               required
-              className="bg-green-900/50 border-green-700 text-white placeholder:text-green-500"
+              className="bg-[#1A2560] border-[#1E2B6E] text-white placeholder:text-[#474A4A] focus:border-[#E61D25]"
             />
             {state?.fieldErrors?.displayName && (
-              <p className="text-xs text-red-400">{state.fieldErrors.displayName[0]}</p>
+              <p className="text-xs text-[#E61D25]">{state.fieldErrors.displayName[0]}</p>
             )}
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="email" className="text-green-200">Email</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-[#D1D4D1]">Email</Label>
             <Input
               id="email"
               name="email"
               type="email"
               placeholder="you@example.com"
               required
-              className="bg-green-900/50 border-green-700 text-white placeholder:text-green-500"
+              className="bg-[#1A2560] border-[#1E2B6E] text-white placeholder:text-[#474A4A] focus:border-[#E61D25]"
             />
             {state?.fieldErrors?.email && (
-              <p className="text-xs text-red-400">{state.fieldErrors.email[0]}</p>
+              <p className="text-xs text-[#E61D25]">{state.fieldErrors.email[0]}</p>
             )}
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="password" className="text-green-200">
-              Password <span className="text-green-500 text-xs">(min 8 characters)</span>
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-[#D1D4D1]">
+              Password <span className="text-[#474A4A] text-xs">(min 8 characters)</span>
             </Label>
             <Input
               id="password"
@@ -70,17 +74,17 @@ export default function RegisterPage() {
               type="password"
               placeholder="••••••••"
               required
-              className="bg-green-900/50 border-green-700 text-white placeholder:text-green-500"
+              className="bg-[#1A2560] border-[#1E2B6E] text-white placeholder:text-[#474A4A] focus:border-[#E61D25]"
             />
             {state?.fieldErrors?.password && (
-              <p className="text-xs text-red-400">{state.fieldErrors.password[0]}</p>
+              <p className="text-xs text-[#E61D25]">{state.fieldErrors.password[0]}</p>
             )}
           </div>
 
           <Button
             type="submit"
             disabled={pending}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
+            className="w-full bg-[#E61D25] hover:bg-[#CC1920] text-white font-semibold"
           >
             {pending ? "Creating account…" : "Create account"}
           </Button>
@@ -88,10 +92,10 @@ export default function RegisterPage() {
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-green-800" />
+            <span className="w-full border-t border-[#1E2B6E]" />
           </div>
           <div className="relative flex justify-center text-xs">
-            <span className="bg-green-950 px-2 text-green-500">or</span>
+            <span className="bg-[#0D1333] px-2 text-[#474A4A]">or</span>
           </div>
         </div>
 
@@ -99,17 +103,17 @@ export default function RegisterPage() {
           <Button
             type="submit"
             variant="outline"
-            className="w-full border-green-700 text-green-200 hover:bg-green-900"
+            className="w-full border-[#2A398D] text-[#D1D4D1] hover:bg-[#1A2560] hover:text-white"
           >
             Continue with Google
           </Button>
         </form>
       </CardContent>
 
-      <CardFooter className="justify-center">
-        <p className="text-sm text-green-400">
+      <CardFooter className="justify-center border-t border-[#1E2B6E] pt-4">
+        <p className="text-sm text-[#D1D4D1]">
           Already have an account?{" "}
-          <Link href="/login" className="text-emerald-400 hover:underline">
+          <Link href="/login" className="text-[#3CAC3B] hover:text-[#4DC94C] underline underline-offset-2">
             Sign in
           </Link>
         </p>

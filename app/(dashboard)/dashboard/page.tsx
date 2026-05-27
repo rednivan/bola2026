@@ -6,10 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  Trophy, Clock, Calendar, Users, TrendingUp, AlertCircle, ArrowRight, Shield
-} from "lucide-react"
+import { Trophy, Clock, Calendar, Users, TrendingUp, AlertCircle, ArrowRight, Shield } from "lucide-react"
 import Link from "next/link"
+import { HowToGuide } from "@/components/how-to-guide"
 
 async function getDashboardData(userId: string) {
   const [tournament, prediction, leagues, upcomingMatches, recentMatches] = await Promise.all([
@@ -30,11 +29,7 @@ async function getDashboardData(userId: string) {
     }),
 
     prisma.match.findMany({
-      where: {
-        tournament: { year: 2026 },
-        kickoff: { gt: new Date() },
-        homeTeamId: { not: null },
-      },
+      where: { tournament: { year: 2026 }, kickoff: { gt: new Date() }, homeTeamId: { not: null } },
       include: {
         homeTeam: { select: { name: true, code: true, flagUrl: true } },
         awayTeam: { select: { name: true, code: true, flagUrl: true } },
@@ -69,12 +64,6 @@ const STAGE_LABEL: Record<string, string> = {
   THIRD_PLACE: "3rd Place", FINAL: "Final",
 }
 
-const STATUS_COLOUR: Record<string, string> = {
-  DRAFT: "bg-yellow-700",
-  GROUP_COMPLETE: "bg-blue-700",
-  COMPLETE: "bg-emerald-700",
-}
-
 export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
@@ -98,27 +87,30 @@ export default async function DashboardPage() {
   return (
     <div className="p-6 lg:p-8 space-y-6 text-white">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">
-          Welcome back, {dbUser.displayName} 👋
-        </h1>
-        <p className="text-zinc-400 text-sm mt-1">
-          {tournament
-            ? tournamentStarted
-              ? groupStageEnded ? "KO stage is live — update your bracket!" : "Group stage is live!"
-              : `Tournament starts ${formatDistanceToNow(tournament.groupStageStart, { addSuffix: true })}`
-            : "Loading tournament data…"}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">
+            Welcome back, {dbUser.displayName}
+          </h1>
+          <p className="text-[#D1D4D1]/70 text-sm mt-1">
+            {tournament
+              ? tournamentStarted
+                ? groupStageEnded ? "KO stage is live — update your bracket!" : "Group stage is live!"
+                : `Tournament starts ${formatDistanceToNow(tournament.groupStageStart, { addSuffix: true })}`
+              : "Loading tournament data…"}
+          </p>
+        </div>
+        <HowToGuide variant="dashboard" />
       </div>
 
-      {/* Admin notice if no teams loaded */}
+      {/* Admin notice */}
       {dbUser.role === "ADMIN" && !teamsLoaded && (
-        <Alert className="border-amber-700 bg-amber-950/40">
+        <Alert className="border-amber-600/50 bg-amber-950/30">
           <AlertCircle className="h-4 w-4 text-amber-400" />
           <AlertDescription className="text-amber-300 flex items-center justify-between">
-            <span>No teams or matches in the database yet. Run the admin sync first.</span>
+            <span>No teams or matches loaded yet. Run the admin sync first.</span>
             <Link href="/admin">
-              <Button size="sm" variant="outline" className="border-amber-600 text-amber-300 hover:bg-amber-900 ml-4">
+              <Button size="sm" variant="outline" className="border-amber-600 text-amber-300 hover:bg-amber-900/30 ml-4">
                 <Shield className="w-3.5 h-3.5 mr-1.5" /> Admin Sync
               </Button>
             </Link>
@@ -128,13 +120,13 @@ export default async function DashboardPage() {
 
       {/* Prediction CTA */}
       {!prediction ? (
-        <Card className="bg-emerald-900/40 border-emerald-700">
+        <Card className="bg-[#2A398D]/30 border-[#2A398D]">
           <CardContent className="flex items-center justify-between py-5">
             <div>
               <p className="text-white font-semibold">You don't have a prediction yet</p>
-              <p className="text-emerald-300 text-sm mt-0.5">
+              <p className="text-[#D1D4D1]/70 text-sm mt-0.5">
                 {window1Open
-                  ? "Predictions are open — make yours before the first match kicks off!"
+                  ? "Window 1 is open — predict the group stage before it kicks off!"
                   : window2Open
                   ? "Window 2 is open — predict the KO bracket now!"
                   : tournamentStarted
@@ -144,7 +136,7 @@ export default async function DashboardPage() {
             </div>
             {(window1Open || window2Open) && (
               <Link href="/predictions/new">
-                <Button className="bg-emerald-600 hover:bg-emerald-500 shrink-0 ml-4">
+                <Button className="bg-[#E61D25] hover:bg-[#CC1920] shrink-0 ml-4 font-semibold">
                   Make prediction <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>
@@ -152,15 +144,18 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        /* My prediction summary */
-        <Card className="bg-zinc-900 border-zinc-700">
+        <Card className="bg-[#0D1333] border-[#1E2B6E]">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-white text-base flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-emerald-400" />
+                <Trophy className="w-4 h-4 text-[#E61D25]" />
                 My Prediction — {prediction.name}
               </CardTitle>
-              <Badge className={STATUS_COLOUR[prediction.status] ?? "bg-zinc-700"}>
+              <Badge className={
+                prediction.status === "COMPLETE" ? "bg-[#3CAC3B] text-white" :
+                prediction.status === "GROUP_COMPLETE" ? "bg-[#2A398D] text-white" :
+                "bg-amber-700 text-white"
+              }>
                 {prediction.status.replace("_", " ")}
               </Badge>
             </div>
@@ -168,14 +163,14 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-3xl font-bold text-emerald-400">{prediction.totalScore}</p>
-                <p className="text-zinc-400 text-xs mt-0.5">Total points</p>
+                <p className="text-3xl font-bold text-[#E61D25]">{prediction.totalScore}</p>
+                <p className="text-[#D1D4D1]/60 text-xs mt-0.5">Total points</p>
               </div>
               <div>
                 <p className="text-3xl font-bold text-white">
                   {Math.round(prediction.matchAccuracy)}%
                 </p>
-                <p className="text-zinc-400 text-xs mt-0.5">Match accuracy</p>
+                <p className="text-[#D1D4D1]/60 text-xs mt-0.5">Match accuracy</p>
               </div>
             </div>
           </CardContent>
@@ -185,7 +180,7 @@ export default async function DashboardPage() {
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Tournament", value: "2026", sub: "USA / CAN / MEX", icon: Trophy },
+          { label: "Tournament", value: "2026", sub: "USA · CAN · MEX", icon: Trophy },
           { label: "My Leagues", value: leagues.length || "—", sub: leagues.length ? "active" : "join or create one", icon: Users },
           { label: "My Score", value: prediction?.totalScore ?? "—", sub: "points", icon: TrendingUp },
           {
@@ -195,14 +190,14 @@ export default async function DashboardPage() {
             icon: Clock,
           },
         ].map(({ label, value, sub, icon: Icon }) => (
-          <Card key={label} className="bg-zinc-900 border-zinc-700">
+          <Card key={label} className="bg-[#0D1333] border-[#1E2B6E]">
             <CardContent className="py-4 px-5">
               <div className="flex items-center gap-2 mb-2">
-                <Icon className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-zinc-400 text-xs">{label}</span>
+                <Icon className="w-3.5 h-3.5 text-[#3CAC3B]" />
+                <span className="text-[#D1D4D1]/60 text-xs">{label}</span>
               </div>
               <p className="text-xl font-bold text-white">{value}</p>
-              {sub && <p className="text-zinc-500 text-xs mt-0.5">{sub}</p>}
+              {sub && <p className="text-[#474A4A] text-xs mt-0.5">{sub}</p>}
             </CardContent>
           </Card>
         ))}
@@ -210,16 +205,16 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Upcoming matches */}
-        <Card className="bg-zinc-900 border-zinc-700">
+        <Card className="bg-[#0D1333] border-[#1E2B6E]">
           <CardHeader className="pb-3">
             <CardTitle className="text-white text-base flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-emerald-400" />
+              <Calendar className="w-4 h-4 text-[#3CAC3B]" />
               Upcoming Matches
             </CardTitle>
           </CardHeader>
           <CardContent>
             {upcomingMatches.length === 0 ? (
-              <p className="text-zinc-500 text-sm py-4 text-center">
+              <p className="text-[#474A4A] text-sm py-4 text-center">
                 {teamsLoaded ? "No upcoming matches" : "Run admin sync to load matches"}
               </p>
             ) : (
@@ -229,19 +224,19 @@ export default async function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 text-sm font-medium text-white">
                         <span className="truncate">{match.homeTeam?.code}</span>
-                        <span className="text-zinc-500 shrink-0">vs</span>
+                        <span className="text-[#474A4A] shrink-0 font-light">vs</span>
                         <span className="truncate">{match.awayTeam?.code}</span>
                       </div>
-                      <p className="text-zinc-500 text-xs mt-0.5">
+                      <p className="text-[#D1D4D1]/50 text-xs mt-0.5">
                         {format(match.kickoff, "d MMM · HH:mm")}
                         {match.group && ` · Group ${match.group.letter}`}
                       </p>
                     </div>
                     <div className="text-right shrink-0 ml-3">
-                      <Badge variant="outline" className="border-zinc-600 text-zinc-400 text-xs">
+                      <Badge variant="outline" className="border-[#1E2B6E] text-[#D1D4D1]/70 text-xs">
                         {STAGE_LABEL[match.stage]}
                       </Badge>
-                      <p className="text-emerald-400 text-xs mt-1">{match.pointsAvailable} pts</p>
+                      <p className="text-[#3CAC3B] text-xs mt-1">{match.pointsAvailable} pts</p>
                     </div>
                   </div>
                 ))}
@@ -251,40 +246,38 @@ export default async function DashboardPage() {
         </Card>
 
         {/* Recent results */}
-        <Card className="bg-zinc-900 border-zinc-700">
+        <Card className="bg-[#0D1333] border-[#1E2B6E]">
           <CardHeader className="pb-3">
             <CardTitle className="text-white text-base flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <TrendingUp className="w-4 h-4 text-[#3CAC3B]" />
               Recent Results
             </CardTitle>
           </CardHeader>
           <CardContent>
             {recentMatches.length === 0 ? (
-              <p className="text-zinc-500 text-sm py-4 text-center">
-                No results yet
-              </p>
+              <p className="text-[#474A4A] text-sm py-4 text-center">No results yet</p>
             ) : (
               <div className="space-y-3">
                 {recentMatches.map((match) => (
                   <div key={match.id} className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 text-sm font-medium text-white">
-                        <span className={match.winnerId === match.homeTeamId ? "text-emerald-400" : ""}>
+                        <span className={match.winnerId === match.homeTeamId ? "text-[#3CAC3B]" : ""}>
                           {match.homeTeam?.code}
                         </span>
-                        <span className="text-zinc-300 font-bold shrink-0 tabular-nums">
+                        <span className="text-[#D1D4D1] font-bold shrink-0 tabular-nums">
                           {match.homeScore} – {match.awayScore}
                         </span>
-                        <span className={match.winnerId === match.awayTeamId ? "text-emerald-400" : ""}>
+                        <span className={match.winnerId === match.awayTeamId ? "text-[#3CAC3B]" : ""}>
                           {match.awayTeam?.code}
                         </span>
                       </div>
-                      <p className="text-zinc-500 text-xs mt-0.5">
+                      <p className="text-[#D1D4D1]/50 text-xs mt-0.5">
                         {format(match.kickoff, "d MMM")}
                         {match.group && ` · Group ${match.group.letter}`}
                       </p>
                     </div>
-                    <Badge variant="outline" className="border-zinc-600 text-zinc-400 text-xs shrink-0 ml-3">
+                    <Badge variant="outline" className="border-[#1E2B6E] text-[#D1D4D1]/70 text-xs shrink-0 ml-3">
                       {STAGE_LABEL[match.stage]}
                     </Badge>
                   </div>
@@ -297,15 +290,15 @@ export default async function DashboardPage() {
 
       {/* Leagues */}
       {leagues.length > 0 && (
-        <Card className="bg-zinc-900 border-zinc-700">
+        <Card className="bg-[#0D1333] border-[#1E2B6E]">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-white text-base flex items-center gap-2">
-                <Users className="w-4 h-4 text-emerald-400" />
+                <Users className="w-4 h-4 text-[#3CAC3B]" />
                 My Leagues
               </CardTitle>
               <Link href="/leagues">
-                <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white text-xs">
+                <Button variant="ghost" size="sm" className="text-[#D1D4D1]/60 hover:text-white text-xs">
                   View all <ArrowRight className="w-3.5 h-3.5 ml-1" />
                 </Button>
               </Link>
@@ -317,9 +310,11 @@ export default async function DashboardPage() {
                 <div key={m.id} className="flex items-center justify-between">
                   <p className="text-white text-sm font-medium">{m.league.name}</p>
                   <div className="flex items-center gap-3">
-                    <span className="text-zinc-400 text-xs">Rank</span>
-                    <Badge className="bg-zinc-700 text-white">#{m.currentRank || "—"}</Badge>
-                    <span className="text-emerald-400 font-bold text-sm">
+                    <span className="text-[#D1D4D1]/60 text-xs">Rank</span>
+                    <Badge className="bg-[#131D42] border border-[#1E2B6E] text-white">
+                      #{m.currentRank || "—"}
+                    </Badge>
+                    <span className="text-[#E61D25] font-bold text-sm">
                       {m.prediction.totalScore} pts
                     </span>
                   </div>

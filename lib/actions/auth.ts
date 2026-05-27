@@ -100,3 +100,43 @@ export async function logout() {
   revalidatePath("/", "layout")
   redirect("/login")
 }
+
+export async function requestPasswordReset(
+  _prev: AuthState,
+  formData: FormData
+): Promise<AuthState & { success?: boolean }> {
+  const email = z.string().email().safeParse(formData.get("email"))
+  if (!email.success) return { fieldErrors: { email: ["Please enter a valid email address"] } }
+
+  const supabase = await createClient()
+  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/reset-password`
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email.data, { redirectTo })
+
+  // Always return success to avoid leaking whether the email exists
+  if (error) console.error("resetPasswordForEmail error:", error.message)
+  return { success: true }
+}
+
+export async function updatePassword(
+  _prev: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  const password = formData.get("password") as string
+  const confirm = formData.get("confirmPassword") as string
+
+  if (!password || password.length < 8) {
+    return { fieldErrors: { password: ["Password must be at least 8 characters"] } }
+  }
+  if (password !== confirm) {
+    return { fieldErrors: { confirmPassword: ["Passwords do not match"] } }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.updateUser({ password })
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/", "layout")
+  redirect("/dashboard")
+}

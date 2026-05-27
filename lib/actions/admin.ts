@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { syncTeamsFromApi, syncMatchesFromApi } from "@/lib/sync"
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -13,43 +14,31 @@ async function requireAdmin() {
 }
 
 export async function syncTeams(): Promise<{ ok: boolean; message: string }> {
-  await requireAdmin()
-
-  const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/sync`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "teams" }),
-  })
-
-  const data = await res.json()
-  if (!res.ok) return { ok: false, message: data.error ?? "Sync failed" }
-  return { ok: true, message: data.teams ?? "Teams synced" }
+  try {
+    await requireAdmin()
+    const message = await syncTeamsFromApi()
+    return { ok: true, message }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
 }
 
 export async function syncMatches(): Promise<{ ok: boolean; message: string }> {
-  await requireAdmin()
-
-  const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/sync`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "matches" }),
-  })
-
-  const data = await res.json()
-  if (!res.ok) return { ok: false, message: data.error ?? "Sync failed" }
-  return { ok: true, message: data.matches ?? "Matches synced" }
+  try {
+    await requireAdmin()
+    const message = await syncMatchesFromApi()
+    return { ok: true, message }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
 }
 
 export async function syncAll(): Promise<{ ok: boolean; message: string }> {
-  await requireAdmin()
-
-  const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/sync`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "all" }),
-  })
-
-  const data = await res.json()
-  if (!res.ok) return { ok: false, message: data.error ?? "Sync failed" }
-  return { ok: true, message: `${data.teams} · ${data.matches}` }
+  try {
+    await requireAdmin()
+    const [teams, matches] = await Promise.all([syncTeamsFromApi(), syncMatchesFromApi()])
+    return { ok: true, message: `${teams} · ${matches}` }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
 }
