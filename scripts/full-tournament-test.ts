@@ -10,8 +10,8 @@
  *
  * Scoring rules baked into this test (mirrors what should go into lib/scoring.ts):
  *   Group match result:  1 pt per correct 1/X/2 outcome
- *   Group standing pos1: 3 pts, pos2: 2 pts, pos3: 1 pt, pos4: 0 pts
- *   Third-place advance: 2 pts per correctly predicted advancing group
+ *   Group standing pos1-4: 1 pt each (flat) per correct position
+ *   Third-place advance: 1 pt per correctly predicted advancing group
  *   KO bracket:         pointsAvailable on each match (3/6/12/20/10/35 pts)
  */
 
@@ -38,8 +38,8 @@ function info(m: string)   { console.log(`  ${INFO} ${m}`) }
 
 // ─── Scoring constants ────────────────────────────────────────────────────────
 
-const STANDING_PTS: Record<number, number> = { 1: 3, 2: 2, 3: 1, 4: 0 }
-const THIRD_PLACE_PTS = 2        // per correctly predicted advancing 3rd-place group
+const STANDING_PTS: Record<number, number> = { 1: 1, 2: 1, 3: 1, 4: 1 }
+const THIRD_PLACE_PTS = 1        // per correctly predicted advancing 3rd-place group
 const KO_MAX = 3*16 + 6*8 + 12*4 + 25*2 + 10*1 + 60*1  // 264 (SF=25, FINAL=60)
 const GROUP_MATCH_MAX = 72       // 72 matches × 1 pt
 
@@ -335,7 +335,7 @@ async function main() {
     standingsMaxPts += ranked.reduce((s, r) => s + (STANDING_PTS[r.position] ?? 0), 0)
     info(`Group ${letter}: ${orderedCodes.join(" > ")}`)
   }
-  assert(standingsMaxPts === 72, `Max standings pts = 72 (got ${standingsMaxPts})`)
+  assert(standingsMaxPts === 48, `Max standings pts = 48 (got ${standingsMaxPts})`)
 
   // ── DETERMINE 3RD-PLACE ADVANCING TEAMS ──────────────────────────────────
 
@@ -359,7 +359,7 @@ async function main() {
   info(`Advancing 3rd (alphabetical): ${advancing3rd.map(t => t.code).join(", ")}`)
   info(`Not advancing: ${notAdvancing3rd.map(t => t.code).join(", ")}`)
   assert(advancing3rd.length === 8, `Exactly 8 3rd-place teams advancing (got ${advancing3rd.length})`)
-  assert(tpMaxPts === 16, `3rd-place max pts = 16 (got ${tpMaxPts})`)
+  assert(tpMaxPts === 8, `3rd-place max pts = 8 (got ${tpMaxPts})`)
 
   // ── SIMULATE KO BRACKET ───────────────────────────────────────────────────
 

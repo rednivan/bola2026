@@ -45,17 +45,19 @@ enum Confederation {
 
 // id maps 1:1 with Supabase auth.users UUID
 model User {
-  id          String   @id
-  email       String   @unique
-  displayName String
-  avatarUrl   String?
-  role        UserRole @default(PLAYER)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id
+  email        String   @unique
+  displayName  String
+  avatarUrl    String?
+  role         UserRole @default(PLAYER)
+  emailOptOut  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   predictions       Prediction[]
   createdLeagues    League[]           @relation("LeagueCreator")
   pushSubscriptions PushSubscription[]
+  matchdayEmails    MatchdayEmailLog[]
 }
 
 // ─── TOURNAMENT ──────────────────────────────────────────────────────────────
@@ -118,10 +120,12 @@ model TournamentGroup {
 }
 
 model GroupTeam {
-  groupId String
-  teamId  String
-  group   TournamentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  team    Team            @relation(fields: [teamId], references: [id])
+  groupId             String
+  teamId              String
+  actualPosition      Int?     // 1 = winner, 2 = runner-up, 3 = third, 4 = bottom; null until group stage complete
+  thirdPlaceQualified Boolean  @default(false) // true if this group's 3rd-place team advances to R32
+  group               TournamentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  team                Team            @relation(fields: [teamId], references: [id])
 
   @@id([groupId, teamId])
 }
@@ -300,6 +304,19 @@ model LeagueRankSnapshot {
   membership LeagueMembership @relation(fields: [leagueMembershipId], references: [id], onDelete: Cascade)
 }
 
+// ─── EMAIL LOGS ──────────────────────────────────────────────────────────────
+
+// One record per user per match day — prevents duplicate emails
+model MatchdayEmailLog {
+  id       String   @id @default(cuid())
+  userId   String
+  matchday String   // "YYYY-MM-DD" UTC
+  sentAt   DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, matchday])
+}
+
 // ─── PUSH NOTIFICATIONS ──────────────────────────────────────────────────────
 
 model PushSubscription {
@@ -311,4 +328,23 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── CRON LOGS ───────────────────────────────────────────────────────────────
+
+model CronLog {
+  id        String   @id @default(cuid())
+  job       String   // "sync-and-score" | "send-matchday-emails" | "lock-predictions"
+  ok        Boolean
+  message   String
+  createdAt DateTime @default(now())
+}
+
+// ─── ODDS CACHE ──────────────────────────────────────────────────────────────
+
+// Single row keyed by stage ("jules_group"). Stores last successful odds fetch.
+model OddsCache {
+  key       String   @id
+  picks     Json     // Record<matchId, "home" | "draw" | "away">
+  updatedAt DateTime @updatedAt
 }

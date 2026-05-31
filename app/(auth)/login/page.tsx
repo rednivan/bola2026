@@ -51,12 +51,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-[#D1D4D1]">Password</Label>
-              <Link href="/forgot-password" className="text-xs text-[#D1D4D1]/60 hover:text-[#3CAC3B] transition-colors">
-                Forgot password?
-              </Link>
-            </div>
+            <Label htmlFor="password" className="text-[#D1D4D1]">Password</Label>
             <Input
               id="password"
               name="password"
@@ -75,6 +70,12 @@ export default function LoginPage() {
             {pending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
+
+        <div className="flex justify-end">
+          <Link href="/forgot-password" className="text-xs text-[#D1D4D1]/60 hover:text-[#3CAC3B] transition-colors">
+            Forgot password?
+          </Link>
+        </div>
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">

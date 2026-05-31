@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/lock-predictions",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-and-score",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/send-matchday-emails",
+      "schedule": "30 */2 * * *"
+    }
+  ]
+}

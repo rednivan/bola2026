@@ -126,7 +126,7 @@ export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder,
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-white font-bold text-lg">Group Stage Standings</h2>
           <p className="text-[#D1D4D1]/60 text-sm mt-0.5">

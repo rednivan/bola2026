@@ -153,8 +153,32 @@ async function cleanup(testUserIds: string[], testMatchIds: string[]) {
 
   await prisma.user.deleteMany({ where: { id: { in: testUserIds } } })
 
+  // Recalculate totalScore for all remaining predictions so real users' scores
+  // are not left stale from scoring calls made during the test
+  const remainingPredictions = await prisma.prediction.findMany({ select: { id: true } })
+  for (const pred of remainingPredictions) {
+    const [matchAgg, standingAgg, thirdAgg, totalPredicted, correctPredicted] = await Promise.all([
+      prisma.matchPrediction.aggregate({ where: { predictionId: pred.id }, _sum: { pointsEarned: true } }),
+      prisma.groupStandingPrediction.aggregate({ where: { predictionId: pred.id }, _sum: { pointsEarned: true } }),
+      prisma.thirdPlacePrediction.aggregate({ where: { predictionId: pred.id }, _sum: { pointsEarned: true } }),
+      prisma.matchPrediction.count({ where: { predictionId: pred.id, match: { homeScore: { not: null } } } }),
+      prisma.matchPrediction.count({ where: { predictionId: pred.id, pointsEarned: { gt: 0 } } }),
+    ])
+    await prisma.prediction.update({
+      where: { id: pred.id },
+      data: {
+        totalScore:
+          (matchAgg._sum.pointsEarned ?? 0) +
+          (standingAgg._sum.pointsEarned ?? 0) +
+          (thirdAgg._sum.pointsEarned ?? 0),
+        matchAccuracy: totalPredicted > 0 ? (correctPredicted / totalPredicted) * 100 : 0,
+      },
+    })
+  }
+
   console.log(`  ${INFO} Deleted ${testUserIds.length} test users, ${predIds.length} predictions`)
   console.log(`  ${INFO} Restored ${testMatchIds.length} match results to null`)
+  console.log(`  ${INFO} Recalculated scores for ${remainingPredictions.length} real prediction(s)`)
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────

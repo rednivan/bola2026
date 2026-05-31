@@ -43,7 +43,12 @@ export async function register(
 
   if (error) return { error: error.message }
 
-  if (data.user) {
+  // Supabase returns the existing user with empty identities for duplicate emails
+  if (!data.user || data.user.identities?.length === 0) {
+    return { fieldErrors: { email: ["An account with this email already exists"] } }
+  }
+
+  try {
     await prisma.user.create({
       data: {
         id: data.user.id,
@@ -52,6 +57,8 @@ export async function register(
         role: "PLAYER",
       },
     })
+  } catch {
+    return { fieldErrors: { email: ["An account with this email already exists"] } }
   }
 
   revalidatePath("/", "layout")
@@ -113,8 +120,7 @@ export async function requestPasswordReset(
 
   const { error } = await supabase.auth.resetPasswordForEmail(email.data, { redirectTo })
 
-  // Always return success to avoid leaking whether the email exists
-  if (error) console.error("resetPasswordForEmail error:", error.message)
+  if (error) return { error: error.message }
   return { success: true }
 }
 

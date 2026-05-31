@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Trophy, Users, Shield, LogOut } from "lucide-react"
+import { LayoutDashboard, Trophy, Users, Shield, LogOut, UserCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { logout } from "@/lib/actions/auth"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -77,7 +77,7 @@ export function Sidebar({ user }: Props) {
 
         {/* User */}
         <div className="border-t border-[#1D2B78] px-4 py-4">
-          <div className="flex items-center gap-3 mb-3">
+          <Link href="/profile" className="flex items-center gap-3 mb-3 hover:opacity-80 transition-opacity">
             <Avatar className="h-9 w-9">
               <AvatarImage src={user.avatarUrl ?? undefined} />
               <AvatarFallback className="bg-[#E61D25] text-white text-sm font-bold">
@@ -88,7 +88,8 @@ export function Sidebar({ user }: Props) {
               <p className="text-white text-sm font-medium truncate">{user.displayName}</p>
               <p className="text-[#D1D4D1]/60 text-xs truncate">{user.email}</p>
             </div>
-          </div>
+            <UserCircle className="w-4 h-4 text-[#D1D4D1]/40 shrink-0" />
+          </Link>
           <form action={logout}>
             <button
               type="submit"

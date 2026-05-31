@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { prisma } from "@/lib/prisma"
 import { createPrediction } from "@/lib/actions/predictions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,11 +11,6 @@ export default async function NewPredictionPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
-
-  const existing = await prisma.prediction.findFirst({
-    where: { userId: user.id, tournament: { year: 2026 } },
-  })
-  if (existing) redirect(`/predictions/${existing.id}/edit`)
 
   return (
     <div className="p-6 lg:p-8 flex items-center justify-center min-h-[60vh]">

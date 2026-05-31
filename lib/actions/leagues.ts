@@ -21,7 +21,12 @@ const createSchema = z.object({
   isPublic: z.boolean().default(false),
 })
 
-export type LeagueState = { error?: string; fieldErrors?: Record<string, string[]> }
+export type LeagueState = {
+  error?: string
+  fieldErrors?: Record<string, string[]>
+  joinCode?: string
+  leagueName?: string
+}
 
 export async function createLeague(
   _prev: LeagueState,
@@ -36,10 +41,11 @@ export async function createLeague(
     })
     if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors }
 
+    const predictionId = formData.get("predictionId") as string
     const prediction = await prisma.prediction.findFirst({
-      where: { userId, tournament: { year: 2026 } },
+      where: { id: predictionId || undefined, userId, tournament: { year: 2026 } },
     })
-    if (!prediction) return { error: "Create a prediction before joining a league." }
+    if (!prediction) return { error: "Select a prediction before creating a league." }
 
     const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
     if (!tournament) return { error: "Tournament not found." }
@@ -64,6 +70,24 @@ export async function createLeague(
     })
 
     revalidatePath("/leagues")
+    return { joinCode: league.joinCode, leagueName: league.name }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function deleteLeague(leagueId: string): Promise<{ error?: string }> {
+  try {
+    const userId = await getAuthUserId()
+
+    const league = await prisma.league.findUnique({ where: { id: leagueId } })
+    if (!league) return { error: "League not found." }
+    if (league.creatorId !== userId) return { error: "Only the creator can delete this league." }
+
+    await prisma.leagueMembership.deleteMany({ where: { leagueId } })
+    await prisma.league.delete({ where: { id: leagueId } })
+
+    revalidatePath("/leagues")
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -86,10 +110,11 @@ export async function joinLeague(
     })
     if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors }
 
+    const predictionId = formData.get("predictionId") as string
     const prediction = await prisma.prediction.findFirst({
-      where: { userId, tournament: { year: 2026 } },
+      where: { id: predictionId || undefined, userId, tournament: { year: 2026 } },
     })
-    if (!prediction) return { error: "Create a prediction before joining a league." }
+    if (!prediction) return { error: "Select a prediction to join with." }
 
     const league = await prisma.league.findUnique({ where: { joinCode: parsed.data.code } })
     if (!league) return { error: "League not found — check the code and try again." }
@@ -107,5 +132,35 @@ export async function joinLeague(
     return {}
   } catch (e) {
     return { error: (e as Error).message }
+  }
+}
+
+export async function joinPublicLeague(
+  leagueId: string,
+  predictionId: string,
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    const userId = await getAuthUserId()
+
+    const [league, prediction] = await Promise.all([
+      prisma.league.findUnique({ where: { id: leagueId } }),
+      prisma.prediction.findFirst({ where: { id: predictionId, userId } }),
+    ])
+
+    if (!league) return { ok: false, message: "League not found." }
+    if (!league.isPublic) return { ok: false, message: "This league is not public." }
+    if (!prediction) return { ok: false, message: "Prediction not found." }
+
+    const existing = await prisma.leagueMembership.findUnique({
+      where: { leagueId_predictionId: { leagueId, predictionId } },
+    })
+    if (existing) return { ok: false, message: "You've already joined this league." }
+
+    await prisma.leagueMembership.create({ data: { leagueId, predictionId } })
+    revalidatePath("/leagues")
+    revalidatePath("/leagues/browse")
+    return { ok: true, message: "Joined!" }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
   }
 }

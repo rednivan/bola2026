@@ -31,13 +31,11 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
 
   function toggle(groupId: string) {
     if (locked) return
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(groupId)) next.delete(groupId)
-      else if (next.size < MAX_PICKS) next.add(groupId)
-      onSelectionChange?.([...next])
-      return next
-    })
+    const next = new Set(selected)
+    if (next.has(groupId)) next.delete(groupId)
+    else if (next.size < MAX_PICKS) next.add(groupId)
+    setSelected(next)
+    onSelectionChange?.([...next])
     setStatus("idle")
   }
 
@@ -54,7 +52,7 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-white font-bold text-lg">Third-Place Qualifiers</h2>
           <p className="text-[#D1D4D1]/60 text-sm mt-0.5">
@@ -92,18 +90,18 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
 
       {/* Progress dots */}
       <div className="flex items-center gap-3">
-        <div className="flex gap-1.5">
+        <div className="flex-1 flex gap-1.5">
           {Array.from({ length: MAX_PICKS }).map((_, i) => (
             <div
               key={i}
-              className={`h-1.5 w-8 rounded-full transition-colors ${
+              className={`h-1.5 flex-1 rounded-full transition-colors ${
                 i < selected.size ? "bg-[#3CAC3B]" : "bg-[#1E2B6E]"
               }`}
             />
           ))}
         </div>
-        <span className={`text-sm ${remaining === 0 ? "text-[#3CAC3B]" : "text-[#D1D4D1]/60"}`}>
-          {remaining === 0 ? "8/8 selected ✓" : `${selected.size}/8 — pick ${remaining} more`}
+        <span className={`text-sm shrink-0 ${remaining === 0 ? "text-[#3CAC3B]" : "text-[#D1D4D1]/60"}`}>
+          {remaining === 0 ? "8/8 ✓" : `${selected.size}/8`}
         </span>
       </div>
 

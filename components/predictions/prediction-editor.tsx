@@ -1,12 +1,14 @@
 "use client"
 
 import { useState } from "react"
+import { toast } from "sonner"
 import { CheckCircle2, Circle } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { GroupStageEditor } from "./group-stage-editor"
 import { MatchResultsEditor } from "./match-results-editor"
 import { ThirdPlacePicker } from "./third-place-picker"
 import { KOBracketEditor, type KOMatch, type KOPick } from "./ko-bracket-editor"
+import { KOResultsView } from "./ko-results-view"
 
 export type ResultChoice = "home" | "draw" | "away" | null
 
@@ -38,8 +40,15 @@ type Props = {
   matchTotal: number
   locked: boolean
   koMatches: KOMatch[]
-  savedKOPicksMap: Record<string, { predictedWinnerId: string | null }>
+  savedKOPicksMap: Record<string, { predictedWinnerId: string | null; pointsEarned: number }>
   koLocked: boolean
+  koResultsMode?: boolean
+  initialTab?: "matches" | "standings" | "thirdplace" | "ko"
+  // stage → matchId: joker picks keyed by stage name
+  savedJokerPicks?: Record<string, string>
+  // Actual group standings (set by admin post-group stage). When present, overrides user's
+  // group predictions for resolving KO bracket teams.
+  actualGroupOrders?: Record<string, Team[]>
 }
 
 // ─── Group-stage helpers ───────────────────────────────────────────────────
@@ -256,6 +265,10 @@ export function PredictionEditor({
   koMatches,
   savedKOPicksMap,
   koLocked,
+  koResultsMode = false,
+  initialTab,
+  savedJokerPicks = {},
+  actualGroupOrders,
 }: Props) {
   const [picks, setPicks] = useState<Record<string, ResultChoice>>(() =>
     initPicks(matchesByGroup, savedPicksMap, groups)
@@ -269,9 +282,11 @@ export function PredictionEditor({
   const [koPicks, setKOPicks] = useState<Record<string, KOPick>>(() => {
     // Bootstrap: compute initial bracket from saved group/3rd-place data, then
     // walk stage-by-stage so each stage's picks cascade into the next.
+    // When actual standings are available (Window 2+), use them over user's predictions.
     const initOrders = initGroupOrders(groups, savedStandings)
+    const effectiveOrders = actualGroupOrders ? { ...initOrders, ...actualGroupOrders } : initOrders
     const initThirdIds = new Set(savedThirdPlaceGroupIds)
-    return initKOPicksIterative(koMatches, savedKOPicksMap, groups, initOrders, initThirdIds)
+    return initKOPicksIterative(koMatches, savedKOPicksMap, groups, effectiveOrders, initThirdIds)
   })
 
   // Saved counts — initialised from server props, updated optimistically when saves succeed
@@ -287,6 +302,18 @@ export function PredictionEditor({
   const [savedKOCount, setSavedKOCount] = useState(
     () => Object.keys(savedKOPicksMap).length
   )
+
+  const TAB_ORDER = ["matches", "standings", "thirdplace", "ko"] as const
+  type TabValue = typeof TAB_ORDER[number]
+
+  function firstIncompleteTab(): TabValue {
+    if (Object.keys(savedPicksMap).length < matchTotal) return "matches"
+    if (Object.values(savedStandings).reduce((s, g) => s + Object.keys(g).length, 0) < standingsTotal) return "standings"
+    if (savedThirdPlaceGroupIds.length < 8) return "thirdplace"
+    return "ko"
+  }
+
+  const [activeTab, setActiveTab] = useState<TabValue>(() => initialTab ?? firstIncompleteTab())
 
   const matchesByGroupId = Object.fromEntries(
     matchesByGroup.map(({ groupId, matches }) => [groupId, matches])
@@ -331,8 +358,10 @@ export function PredictionEditor({
     thirdPlaceTeam: groupOrders[g.id]?.[2] ?? null,
   }))
 
-  // KO bracket: compute resolved teams for each KO match slot
-  const resolvedKOTeams = computeKOBracket(koMatches, groups, groupOrders, thirdPlaceGroupIds, koPicks)
+  // KO bracket: compute resolved teams for each KO match slot.
+  // Actual standings override user's group predictions when available (Window 2+).
+  const effectiveGroupOrders = actualGroupOrders ? { ...groupOrders, ...actualGroupOrders } : groupOrders
+  const resolvedKOTeams = computeKOBracket(koMatches, groups, effectiveGroupOrders, thirdPlaceGroupIds, koPicks)
 
   function badge(filled: number, total: number) {
     const done = filled === total
@@ -417,7 +446,15 @@ export function PredictionEditor({
         </div>
       </div>
 
-    <Tabs defaultValue="matches" className="space-y-6">
+    <Tabs value={activeTab} onValueChange={(v) => {
+      if (activeTab === "matches" && !locked) {
+        const remaining = matchTotal - filledPicks
+        if (remaining > 0) {
+          toast.warning(`${remaining} match${remaining === 1 ? "" : "es"} still need a pick on the Match Results tab.`)
+        }
+      }
+      setActiveTab(v as TabValue)
+    }} className="space-y-6">
       <TabsList className="bg-[#0D1333] border border-[#1E2B6E] p-1 h-auto flex-nowrap overflow-x-auto w-full [scrollbar-width:none] [-webkit-overflow-scrolling:touch]">
         <TabsTrigger
           value="matches"
@@ -458,8 +495,12 @@ export function PredictionEditor({
           matchesByGroup={matchesByGroup}
           picks={picks}
           onPickChange={handlePickChange}
-          onSaveSuccess={(count) => setSavedMatchCount(count)}
+          onSaveSuccess={(count) => {
+            setSavedMatchCount(count)
+            if (count >= matchTotal) setActiveTab("standings")
+          }}
           locked={locked}
+          jokerMatchId={savedJokerPicks["GROUP"] ?? null}
         />
       </TabsContent>
 
@@ -469,7 +510,10 @@ export function PredictionEditor({
           groups={groupsWithThird}
           groupOrders={groupOrders}
           onReorder={handleReorder}
-          onSaveSuccess={() => setSavedStandingsCount(standingsTotal)}
+          onSaveSuccess={() => {
+            setSavedStandingsCount(standingsTotal)
+            setActiveTab("thirdplace")
+          }}
           locked={locked}
         />
       </TabsContent>
@@ -481,20 +525,33 @@ export function PredictionEditor({
           savedGroupIds={savedThirdPlaceGroupIds}
           locked={locked}
           onSelectionChange={handleThirdPlaceChange}
-          onSaveSuccess={() => setSavedThirdPlaceCount(8)}
+          onSaveSuccess={() => {
+            setSavedThirdPlaceCount(8)
+            setActiveTab("ko")
+          }}
         />
       </TabsContent>
 
       <TabsContent value="ko" className="mt-0">
-        <KOBracketEditor
-          predictionId={predictionId}
-          koMatches={koMatches}
-          picks={koPicks}
-          onPickChange={handleKOPickChange}
-          onSaveSuccess={(count) => setSavedKOCount(count)}
-          resolvedTeams={resolvedKOTeams}
-          locked={koLocked}
-        />
+        {koResultsMode ? (
+          <KOResultsView
+            koMatches={koMatches}
+            savedKOPicksMap={savedKOPicksMap}
+            jokerMatchIds={savedJokerPicks}
+            resolvedTeams={resolvedKOTeams}
+          />
+        ) : (
+          <KOBracketEditor
+            predictionId={predictionId}
+            koMatches={koMatches}
+            picks={koPicks}
+            onPickChange={handleKOPickChange}
+            onSaveSuccess={(count) => setSavedKOCount(count)}
+            resolvedTeams={resolvedKOTeams}
+            locked={koLocked}
+            jokerMatchIds={savedJokerPicks}
+          />
+        )}
       </TabsContent>
     </Tabs>
     </div>

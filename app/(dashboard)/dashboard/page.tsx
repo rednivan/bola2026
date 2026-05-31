@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { getCachedTournament } from "@/lib/cache"
 import { formatDistanceToNow, format, isPast } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -11,25 +12,26 @@ import Link from "next/link"
 import { HowToGuide } from "@/components/how-to-guide"
 
 async function getDashboardData(userId: string) {
-  const [tournament, prediction, leagues, upcomingMatches, recentMatches] = await Promise.all([
-    prisma.tournament.findUnique({ where: { year: 2026 } }),
+  const [tournament, predictions, leagues, upcomingMatches, recentMatches] = await Promise.all([
+    getCachedTournament(),
 
-    prisma.prediction.findFirst({
+    prisma.prediction.findMany({
       where: { userId, tournament: { year: 2026 } },
       select: { id: true, name: true, status: true, totalScore: true, matchAccuracy: true },
+      orderBy: { name: "asc" },
     }),
 
     prisma.leagueMembership.findMany({
       where: { prediction: { userId, tournament: { year: 2026 } } },
       include: {
-        league: { select: { name: true } },
+        league: { select: { id: true, name: true } },
         prediction: { select: { totalScore: true } },
       },
       take: 3,
     }),
 
     prisma.match.findMany({
-      where: { tournament: { year: 2026 }, kickoff: { gt: new Date() }, homeTeamId: { not: null } },
+      where: { tournament: { year: 2026 }, kickoff: { gt: new Date() }, homeTeamId: { not: null }, homeScore: null },
       include: {
         homeTeam: { select: { name: true, code: true, flagUrl: true } },
         awayTeam: { select: { name: true, code: true, flagUrl: true } },
@@ -42,7 +44,6 @@ async function getDashboardData(userId: string) {
     prisma.match.findMany({
       where: {
         tournament: { year: 2026 },
-        kickoff: { lt: new Date() },
         homeScore: { not: null },
         homeTeamId: { not: null },
       },
@@ -56,7 +57,7 @@ async function getDashboardData(userId: string) {
     }),
   ])
 
-  return { tournament, prediction, leagues, upcomingMatches, recentMatches }
+  return { tournament, predictions, leagues, upcomingMatches, recentMatches }
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -75,14 +76,15 @@ export default async function DashboardPage() {
   ])
   if (!dbUser) redirect("/login")
 
-  const { tournament, prediction, leagues, upcomingMatches, recentMatches } = data
+  const { tournament, predictions, leagues, upcomingMatches, recentMatches } = data
 
   const now = new Date()
   const tournamentStarted = tournament ? isPast(tournament.groupStageStart) : false
   const groupStageEnded = tournament ? isPast(tournament.groupStageEnd) : false
+  const koStarted = tournament ? isPast(tournament.knockoutStageStart) : false
   const window1Open = tournament && !tournamentStarted
-  const window2Open = tournament && groupStageEnded && !isPast(tournament.knockoutStageStart)
-  const teamsLoaded = upcomingMatches.length > 0 || recentMatches.length > 0
+  const window2Open = tournament && groupStageEnded && !koStarted
+  const teamsLoaded = upcomingMatches.length > 0 || recentMatches.length > 0 || tournamentStarted
 
   return (
     <div className="p-6 lg:p-8 space-y-6 text-white">
@@ -95,7 +97,11 @@ export default async function DashboardPage() {
           <p className="text-[#D1D4D1]/70 text-sm mt-1">
             {tournament
               ? tournamentStarted
-                ? groupStageEnded ? "KO stage is live — update your bracket!" : "Group stage is live!"
+                ? koStarted
+                  ? "KO stage is live — predictions are locked!"
+                  : groupStageEnded
+                  ? "Window 2 open — update your KO bracket before it locks!"
+                  : "Group stage is live!"
                 : `Tournament starts ${formatDistanceToNow(tournament.groupStageStart, { addSuffix: true })}`
               : "Loading tournament data…"}
           </p>
@@ -118,8 +124,8 @@ export default async function DashboardPage() {
         </Alert>
       )}
 
-      {/* Prediction CTA */}
-      {!prediction ? (
+      {/* Prediction CTA / list */}
+      {predictions.length === 0 ? (
         <Card className="bg-[#2A398D]/30 border-[#2A398D]">
           <CardContent className="flex items-center justify-between py-5">
             <div>
@@ -149,30 +155,36 @@ export default async function DashboardPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-white text-base flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-[#E61D25]" />
-                My Prediction — {prediction.name}
+                My Predictions
               </CardTitle>
-              <Badge className={
-                prediction.status === "COMPLETE" ? "bg-[#3CAC3B] text-white" :
-                prediction.status === "GROUP_COMPLETE" ? "bg-[#2A398D] text-white" :
-                "bg-amber-700 text-white"
-              }>
-                {prediction.status.replace("_", " ")}
-              </Badge>
+              <Link href="/predictions">
+                <Button variant="ghost" size="sm" className="text-[#D1D4D1]/60 hover:text-white text-xs">
+                  View all <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              </Link>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-3xl font-bold text-[#E61D25]">{prediction.totalScore}</p>
-                <p className="text-[#D1D4D1]/60 text-xs mt-0.5">Total points</p>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-white">
-                  {Math.round(prediction.matchAccuracy)}%
-                </p>
-                <p className="text-[#D1D4D1]/60 text-xs mt-0.5">Match accuracy</p>
-              </div>
-            </div>
+          <CardContent className="space-y-3">
+            {predictions.map((p) => (
+              <Link key={p.id} href={`/predictions/${p.id}/edit`} className="flex items-center justify-between group">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Badge className={
+                    p.status === "COMPLETE" ? "bg-[#3CAC3B] text-white shrink-0" :
+                    p.status === "GROUP_COMPLETE" ? "bg-[#2A398D] text-white shrink-0" :
+                    "bg-amber-700 text-white shrink-0"
+                  }>
+                    {p.status.replace("_", " ")}
+                  </Badge>
+                  <span className="text-white text-sm font-medium truncate group-hover:text-[#E61D25] transition-colors">
+                    {p.name}
+                  </span>
+                </div>
+                <div className="flex flex-col items-end shrink-0 ml-3 gap-0.5">
+                  <span className="text-[#E61D25] font-bold text-sm tabular-nums">{p.totalScore} pts</span>
+                  <span className="text-[#D1D4D1]/50 text-xs tabular-nums">{Math.round(p.matchAccuracy)}%</span>
+                </div>
+              </Link>
+            ))}
           </CardContent>
         </Card>
       )}
@@ -182,7 +194,7 @@ export default async function DashboardPage() {
         {[
           { label: "Tournament", value: "2026", sub: "USA · CAN · MEX", icon: Trophy },
           { label: "My Leagues", value: leagues.length || "—", sub: leagues.length ? "active" : "join or create one", icon: Users },
-          { label: "My Score", value: prediction?.totalScore ?? "—", sub: "points", icon: TrendingUp },
+          { label: "My Score", value: predictions.length ? Math.max(...predictions.map(p => p.totalScore)) : "—", sub: predictions.length > 1 ? "best prediction" : "points", icon: TrendingUp },
           {
             label: "Window",
             value: window1Open ? "1 Open" : window2Open ? "2 Open" : tournamentStarted ? "Locked" : "Soon",
@@ -223,9 +235,9 @@ export default async function DashboardPage() {
                   <div key={match.id} className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 text-sm font-medium text-white">
-                        <span className="truncate">{match.homeTeam?.code}</span>
+                        <span className="truncate">{match.homeTeam?.code ?? "TBD"}</span>
                         <span className="text-[#474A4A] shrink-0 font-light">vs</span>
-                        <span className="truncate">{match.awayTeam?.code}</span>
+                        <span className="truncate">{match.awayTeam?.code ?? "TBD"}</span>
                       </div>
                       <p className="text-[#D1D4D1]/50 text-xs mt-0.5">
                         {format(match.kickoff, "d MMM · HH:mm")}
@@ -307,8 +319,8 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="space-y-3">
               {leagues.map((m) => (
-                <div key={m.id} className="flex items-center justify-between">
-                  <p className="text-white text-sm font-medium">{m.league.name}</p>
+                <Link key={m.id} href={`/leagues/${m.league.id}`} className="flex items-center justify-between group">
+                  <p className="text-white text-sm font-medium group-hover:text-[#E61D25] transition-colors">{m.league.name}</p>
                   <div className="flex items-center gap-3">
                     <span className="text-[#D1D4D1]/60 text-xs">Rank</span>
                     <Badge className="bg-[#131D42] border border-[#1E2B6E] text-white">
@@ -318,7 +330,7 @@ export default async function DashboardPage() {
                       {m.prediction.totalScore} pts
                     </span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </CardContent>

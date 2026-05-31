@@ -32,6 +32,15 @@ const STAGE_POINTS: Record<Stage, number> = {
   GROUP: 1, R32: 3, R16: 6, QF: 12, SF: 25, THIRD_PLACE: 10, FINAL: 60,
 }
 
+// Run promise-returning functions in parallel chunks to stay pool-friendly
+async function batch<T>(fns: (() => Promise<T>)[], size = 8): Promise<T[]> {
+  const out: T[] = []
+  for (let i = 0; i < fns.length; i += size) {
+    out.push(...await Promise.all(fns.slice(i, i + size).map((f) => f())))
+  }
+  return out
+}
+
 async function fdFetch(path: string) {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "X-Auth-Token": API_KEY },
@@ -47,17 +56,17 @@ export async function syncTeamsFromApi(): Promise<string> {
 
   const { teams } = await fdFetch(`/competitions/${WC_CODE}/teams`)
 
-  let count = 0
-  for (const t of teams) {
-    const confederation: Confederation = TLA_CONFEDERATION[t.tla] ?? "UEFA"
-    await prisma.team.upsert({
-      where: { code: t.tla },
-      update: { name: t.name, flagUrl: t.crest ?? "" },
-      create: { name: t.name, code: t.tla, flagUrl: t.crest ?? "", confederation },
+  await batch(
+    teams.map((t: { tla: string; name: string; crest?: string }) => {
+      const confederation: Confederation = TLA_CONFEDERATION[t.tla] ?? "UEFA"
+      return () => prisma.team.upsert({
+        where: { code: t.tla },
+        update: { name: t.name, flagUrl: t.crest ?? "" },
+        create: { name: t.name, code: t.tla, flagUrl: t.crest ?? "", confederation },
+      })
     })
-    count++
-  }
-  return `${count} teams upserted`
+  )
+  return `${teams.length} teams upserted`
 }
 
 export async function syncMatchesFromApi(): Promise<string> {
@@ -66,15 +75,17 @@ export async function syncMatchesFromApi(): Promise<string> {
 
   const { matches } = await fdFetch(`/competitions/${WC_CODE}/matches`)
   const groups = await prisma.tournamentGroup.findMany({ where: { tournamentId: tournament.id } })
-  const groupByLetter = Object.fromEntries(groups.map((g) => [g.letter, g]))
+  const groupByLetter = Object.fromEntries(groups.map((g: { letter: string; id: string }) => [g.letter, g]))
 
   const allTeams = await prisma.team.findMany({ select: { id: true, code: true } })
-  const teamsByCode = Object.fromEntries(allTeams.map((t) => [t.code, t.id]))
+  const teamsByCode = Object.fromEntries(allTeams.map((t: { id: string; code: string }) => [t.code, t.id]))
 
-  let count = 0
+  // Build per-match functions then run in parallel batches (pool-safe, no long-held transaction)
+  type MatchFn = () => Promise<unknown>
+  const fns: MatchFn[] = []
+
   for (const m of matches) {
     const stage: Stage = STAGE_MAP[m.stage] ?? "GROUP"
-    // API returns "GROUP_A" format; extract just the letter
     const groupLetter = m.group ? m.group.replace(/^GROUP_/, "") : null
     const group = groupLetter ? groupByLetter[groupLetter] : null
     const homeTeamId = m.homeTeam?.tla ? (teamsByCode[m.homeTeam.tla] ?? null) : null
@@ -97,7 +108,7 @@ export async function syncMatchesFromApi(): Promise<string> {
     const homeTeamPlaceholder = homeTeamId ? null : (m.homeTeam?.name ?? null)
     const awayTeamPlaceholder = awayTeamId ? null : (m.awayTeam?.name ?? null)
 
-    await prisma.match.upsert({
+    fns.push(() => prisma.match.upsert({
       where: { tournamentId_matchNumber: { tournamentId: tournament.id, matchNumber: m.id } },
       update: { homeTeamId, awayTeamId, homeTeamPlaceholder, awayTeamPlaceholder, homeScore, awayScore, isDraw, winnerId },
       create: {
@@ -117,23 +128,22 @@ export async function syncMatchesFromApi(): Promise<string> {
         winnerId,
         pointsAvailable: STAGE_POINTS[stage],
       },
-    })
+    }))
 
-    // Populate group memberships from group-stage matches
     if (stage === "GROUP" && group) {
-      if (homeTeamId) await prisma.groupTeam.upsert({
+      if (homeTeamId) fns.push(() => prisma.groupTeam.upsert({
         where: { groupId_teamId: { groupId: group.id, teamId: homeTeamId } },
         update: {},
         create: { groupId: group.id, teamId: homeTeamId },
-      })
-      if (awayTeamId) await prisma.groupTeam.upsert({
+      }))
+      if (awayTeamId) fns.push(() => prisma.groupTeam.upsert({
         where: { groupId_teamId: { groupId: group.id, teamId: awayTeamId } },
         update: {},
         create: { groupId: group.id, teamId: awayTeamId },
-      })
+      }))
     }
-
-    count++
   }
-  return `${count} matches upserted`
+
+  await batch(fns)
+  return `${matches.length} matches upserted`
 }

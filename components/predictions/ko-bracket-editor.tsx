@@ -1,11 +1,11 @@
 "use client"
 
-import { useTransition, useState } from "react"
+import { useTransition, useState, useEffect } from "react"
 import { format } from "date-fns"
-import { Save, CheckCircle2, AlertCircle, Loader2, Trophy, Shield } from "lucide-react"
+import { Save, CheckCircle2, AlertCircle, Loader2, Trophy, Shield, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { saveKOPredictions } from "@/lib/actions/predictions"
+import { saveKOPredictions, saveJokerPick } from "@/lib/actions/predictions"
 import type { Team } from "./prediction-editor"
 
 export type KOMatch = {
@@ -18,17 +18,20 @@ export type KOMatch = {
   awayTeam: Team | null
   homeTeamPlaceholder: string | null
   awayTeamPlaceholder: string | null
+  homeScore?: number | null
+  awayScore?: number | null
+  winnerId?: string | null
 }
 
 export type KOPick = "home" | "away" | null
 
-const STAGE_META: Record<string, { label: string; cols: string }> = {
-  R32:         { label: "Round of 32",    cols: "lg:grid-cols-2 xl:grid-cols-4" },
-  R16:         { label: "Round of 16",    cols: "lg:grid-cols-2 xl:grid-cols-4" },
-  QF:          { label: "Quarter-finals", cols: "lg:grid-cols-2 xl:grid-cols-2" },
-  SF:          { label: "Semi-finals",    cols: "lg:grid-cols-2" },
-  THIRD_PLACE: { label: "Third Place",    cols: "lg:grid-cols-2" },
-  FINAL:       { label: "Final",          cols: "" },
+const STAGE_META: Record<string, { label: string }> = {
+  R32:         { label: "Round of 32" },
+  R16:         { label: "Round of 16" },
+  QF:          { label: "Quarter-finals" },
+  SF:          { label: "Semi-finals" },
+  THIRD_PLACE: { label: "Third Place" },
+  FINAL:       { label: "Final" },
 }
 
 const STAGE_ORDER = ["R32", "R16", "QF", "SF", "THIRD_PLACE", "FINAL"]
@@ -42,6 +45,8 @@ type Props = {
   // derived team overrides: when DB teams are null, use these bracket-derived teams
   resolvedTeams: Record<string, { home: Team | null; away: Team | null }>
   locked: boolean
+  // stage → matchId joker picks
+  jokerMatchIds?: Record<string, string>
 }
 
 function TeamSlot({ team, placeholder }: { team: Team | null; placeholder: string | null }) {
@@ -126,10 +131,39 @@ function KOMatchCard({ match, pick, resolvedHome, resolvedAway, onPick, locked }
   )
 }
 
-export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, onSaveSuccess, resolvedTeams, locked }: Props) {
+export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, onSaveSuccess, resolvedTeams, locked, jokerMatchIds = {} }: Props) {
   const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
+
+  const thirdPlaceMatch = koMatches.find(m => m.stage === "THIRD_PLACE")
+
+  // Pre-assign 3rd place joker — only one match so it's always set
+  const [jokers, setJokers] = useState<Record<string, string>>(() =>
+    thirdPlaceMatch ? { THIRD_PLACE: thirdPlaceMatch.id, ...jokerMatchIds } : jokerMatchIds
+  )
+
+  // Auto-save 3rd place joker to DB if not already stored
+  useEffect(() => {
+    if (thirdPlaceMatch && !jokerMatchIds["THIRD_PLACE"] && !locked) {
+      saveJokerPick(predictionId, "THIRD_PLACE", thirdPlaceMatch.id)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handleJokerToggle(stage: string, matchId: string) {
+    if (locked) return
+    const newMatchId = jokers[stage] === matchId ? undefined : matchId
+    setJokers((j) => {
+      const next = { ...j }
+      if (newMatchId === undefined) delete next[stage]
+      else next[stage] = newMatchId
+      return next
+    })
+    startTransition(async () => {
+      await saveJokerPick(predictionId, stage, newMatchId ?? null)
+    })
+  }
 
   const matchesByStage = STAGE_ORDER.reduce<Record<string, KOMatch[]>>((acc, stage) => {
     acc[stage] = koMatches.filter((m) => m.stage === stage).sort((a, b) => a.kickoff.getTime() - b.kickoff.getTime())
@@ -168,9 +202,17 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-white font-bold text-lg">Knockout Bracket</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-white font-bold text-lg">Knockout Bracket</h2>
+            {locked && (
+              <span className="text-xs text-[#474A4A] border border-[#1E2B6E] rounded-full px-2 py-0.5">
+                Opens after the group stage ends
+              </span>
+            )}
+          </div>
           <p className="text-[#D1D4D1]/60 text-sm mt-0.5">
             Teams auto-populate from your group predictions. No draws — pick the winner of each match.
+            Tap <Star className="inline w-3.5 h-3.5 text-amber-400 fill-amber-400 mx-0.5 -mt-0.5" /> to set a joker for each round (R32 through SF) — doubles points if correct. The 3rd place match joker is pre-assigned.
           </p>
         </div>
 
@@ -215,6 +257,7 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
         const meta = STAGE_META[stage]
         const stageFilled = matches.filter((m) => picks[m.id]).length
         const isFinal = stage === "FINAL"
+        const stageJoker = jokers[stage]
 
         return (
           <div key={stage} className="space-y-3">
@@ -226,24 +269,58 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
                   +{matches[0].pointsAvailable}pts each
                 </span>
               </div>
-              <span className={`text-xs tabular-nums ${stageFilled === matches.length ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
-                {stageFilled}/{matches.length}
-              </span>
+              <div className="flex items-center gap-3">
+                {stageJoker && (
+                  <span className="flex items-center gap-1 text-amber-400/80 text-xs">
+                    <Star className="w-3 h-3 fill-amber-400" /> Joker set
+                  </span>
+                )}
+                <span className={`text-xs tabular-nums ${stageFilled === matches.length ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
+                  {stageFilled}/{matches.length}
+                </span>
+              </div>
             </div>
 
-            <div className={`grid grid-cols-1 gap-3 ${meta.cols}`}>
+            <div className={
+              stage === "R32" || stage === "R16" ? "ko-grid-wide" :
+              stage === "QF" || stage === "SF" || stage === "THIRD_PLACE" ? "ko-grid-medium" :
+              "ko-grid-single"
+            }>
               {matches.map((match) => {
                 const resolved = resolvedTeams[match.id] ?? { home: null, away: null }
+                const isJoker = stageJoker === match.id
                 return (
-                  <KOMatchCard
-                    key={match.id}
-                    match={match}
-                    pick={picks[match.id] ?? null}
-                    resolvedHome={resolved.home}
-                    resolvedAway={resolved.away}
-                    onPick={(p) => { onPickChange(match.id, p); setStatus("idle") }}
-                    locked={locked}
-                  />
+                  <div key={match.id} className="relative">
+                    <KOMatchCard
+                      match={match}
+                      pick={picks[match.id] ?? null}
+                      resolvedHome={resolved.home}
+                      resolvedAway={resolved.away}
+                      onPick={(p) => { onPickChange(match.id, p); setStatus("idle") }}
+                      locked={locked}
+                    />
+                    {!locked && stage !== "FINAL" && stage !== "THIRD_PLACE" && (
+                      <button
+                        type="button"
+                        onClick={() => handleJokerToggle(stage, match.id)}
+                        title={isJoker ? "Remove joker" : "Set as joker (doubles points if correct)"}
+                        className={`absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded border transition-all ${
+                          isJoker
+                            ? "bg-amber-600/30 border-amber-500/60 text-amber-400"
+                            : "bg-[#0D1333] border-[#1E2B6E] text-slate-400 hover:border-amber-500/60 hover:text-amber-400"
+                        }`}
+                      >
+                        <Star className={`w-3 h-3 ${isJoker ? "fill-amber-400" : ""}`} />
+                      </button>
+                    )}
+                    {(isJoker || stage === "THIRD_PLACE") && (
+                      <div className="absolute top-2 left-2">
+                        <span className="text-[10px] bg-amber-700/40 text-amber-300 border border-amber-600/40 rounded px-1.5 py-0.5 font-medium">
+                          JOKER ×2
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>

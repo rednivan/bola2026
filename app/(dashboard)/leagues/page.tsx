@@ -1,33 +1,54 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { getCachedTournament, getCachedTournamentCounts } from "@/lib/cache"
 import { LeagueActions } from "./league-actions"
 import { HowToGuide } from "@/components/how-to-guide"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Users, Trophy, Hash } from "lucide-react"
+import { Users, Trophy, Hash, Globe } from "lucide-react"
+import Link from "next/link"
+import { DeleteLeagueButton } from "./delete-league-button"
+import { ShareInviteButton } from "./share-invite-button"
 
 async function getLeaguesData(userId: string) {
-  const prediction = await prisma.prediction.findFirst({
-    where: { userId, tournament: { year: 2026 } },
-  })
+  const tournament = await getCachedTournament()
+  if (!tournament) return { predictions: [], completedPredictions: [], memberships: [] }
 
-  if (!prediction) return { prediction: null, memberships: [] }
-
-  const memberships = await prisma.leagueMembership.findMany({
-    where: { predictionId: prediction.id },
-    include: {
-      league: {
-        include: {
-          creator: { select: { displayName: true } },
-          _count: { select: { memberships: true } },
+  const [predictions, memberships, counts] = await Promise.all([
+    prisma.prediction.findMany({
+      where: { userId, tournamentId: tournament.id },
+      include: {
+        _count: {
+          select: { matchPredictions: true, standingPredictions: true, thirdPlacePredictions: true },
         },
       },
-    },
-    orderBy: { joinedAt: "asc" },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.leagueMembership.findMany({
+      where: { prediction: { userId, tournamentId: tournament.id } },
+      include: {
+        prediction: { select: { id: true, name: true } },
+        league: {
+          include: {
+            creator: { select: { displayName: true } },
+            _count: { select: { memberships: true } },
+          },
+        },
+      },
+      orderBy: { joinedAt: "asc" },
+    }),
+    getCachedTournamentCounts(tournament.id),
+  ])
+
+  const totalItems = counts.matchTotal + counts.standingsTotal + 8 + counts.koTotal
+  const completedPredictions = predictions.filter((p) => {
+    if (p.status === "COMPLETE") return true
+    const saved = p._count.matchPredictions + p._count.standingPredictions + p._count.thirdPlacePredictions
+    return totalItems > 0 && saved >= totalItems
   })
 
-  return { prediction, memberships }
+  return { predictions, completedPredictions, memberships }
 }
 
 export default async function LeaguesPage() {
@@ -35,7 +56,7 @@ export default async function LeaguesPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { prediction, memberships } = await getLeaguesData(user.id)
+  const { predictions, completedPredictions, memberships } = await getLeaguesData(user.id)
 
   return (
     <div className="p-6 lg:p-8 space-y-8 text-white">
@@ -46,21 +67,30 @@ export default async function LeaguesPage() {
             Compete with friends — create a league or join one with a code.
           </p>
         </div>
-        <HowToGuide variant="leagues" />
+        <div className="flex items-center gap-3">
+          <Link
+            href="/leagues/browse"
+            className="flex items-center gap-1.5 text-sm text-[#D1D4D1]/60 hover:text-white transition-colors border border-[#1E2B6E] rounded-lg px-3 py-1.5 bg-[#131D42]"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            Browse public
+          </Link>
+          <HowToGuide variant="leagues" />
+        </div>
       </div>
 
-      {!prediction && (
+      {completedPredictions.length === 0 && (
         <Card className="bg-amber-950/20 border-amber-700/50">
           <CardContent className="py-5 text-amber-300 text-sm">
-            You need a prediction before joining a league.{" "}
-            <a href="/predictions/new" className="underline font-medium text-amber-200">
-              Create one first →
+            You need a completed prediction before joining a league.{" "}
+            <a href="/predictions" className="underline font-medium text-amber-200">
+              Finish one first →
             </a>
           </CardContent>
         </Card>
       )}
 
-      <LeagueActions hasPrediction={!!prediction} />
+      <LeagueActions predictions={completedPredictions.map((p) => ({ id: p.id, name: p.name }))} />
 
       {memberships.length > 0 && (
         <div className="space-y-4">
@@ -70,7 +100,11 @@ export default async function LeaguesPage() {
               <Card key={m.id} className="bg-[#0D1333] border-[#1E2B6E]">
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-white text-base leading-snug">{m.league.name}</CardTitle>
+                    <CardTitle className="text-white text-base leading-snug">
+                      <Link href={`/leagues/${m.league.id}`} className="hover:text-[#3CAC3B] transition-colors">
+                        {m.league.name}
+                      </Link>
+                    </CardTitle>
                     <Badge className={m.league.isPublic
                       ? "bg-[#3CAC3B]/20 text-[#3CAC3B] border border-[#3CAC3B]/30 shrink-0"
                       : "bg-[#131D42] text-[#D1D4D1] border border-[#1E2B6E] shrink-0"
@@ -101,9 +135,19 @@ export default async function LeaguesPage() {
                     </div>
                   )}
 
-                  <p className="text-[#474A4A] text-xs">
+                  <p className="text-[#474A4A] text-xs truncate">
                     Created by {m.league.creator.displayName}
+                    {" · "}
+                    <span className="text-[#D1D4D1]/40">{m.prediction.name}</span>
                   </p>
+
+                  {m.league.creatorId === user.id && (
+                    <ShareInviteButton joinCode={m.league.joinCode} leagueName={m.league.name} />
+                  )}
+
+                  {m.league.creatorId === user.id && (
+                    <DeleteLeagueButton leagueId={m.league.id} leagueName={m.league.name} />
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -111,7 +155,7 @@ export default async function LeaguesPage() {
         </div>
       )}
 
-      {memberships.length === 0 && prediction && (
+      {memberships.length === 0 && completedPredictions.length > 0 && (
         <div className="text-center py-12 text-[#474A4A]">
           <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">You haven't joined any leagues yet.</p>
