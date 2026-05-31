@@ -147,10 +147,16 @@ export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPick
       }
     }
 
+    // Optimistic: show saved immediately, persist in background
+    setStatus("saved")
+    onSaveSuccess?.(payload.length)
+
     startTransition(async () => {
       const result = await saveMatchPredictions(predictionId, payload)
-      if (result.ok) { setStatus("saved"); onSaveSuccess?.(payload.length) }
-      else { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
+      if (!result.ok) {
+        setStatus("error")
+        setErrorMsg(result.message ?? "Failed to save")
+      }
     })
   }
 

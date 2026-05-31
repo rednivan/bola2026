@@ -117,10 +117,12 @@ export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder,
       teams: (groupOrders[g.id] ?? g.teams).map((team, i) => ({ teamId: team.id, position: i + 1 })),
     }))
 
+    setStatus("saved")
+    onSaveSuccess?.()
+
     startTransition(async () => {
       const result = await saveGroupStandings(predictionId, payload)
-      if (result.ok) { setStatus("saved"); onSaveSuccess?.() }
-      else { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
+      if (!result.ok) { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
     })
   }
 

@@ -191,10 +191,12 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
         }
       })
 
+    setStatus("saved")
+    onSaveSuccess?.(payload.length)
+
     startTransition(async () => {
       const result = await saveKOPredictions(predictionId, payload)
-      if (result.ok) { setStatus("saved"); onSaveSuccess?.(payload.length) }
-      else { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
+      if (!result.ok) { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
     })
   }
 

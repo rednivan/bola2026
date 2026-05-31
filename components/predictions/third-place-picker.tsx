@@ -41,10 +41,12 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
 
   function handleSave() {
     if (selected.size !== MAX_PICKS) return
+    setStatus("saved")
+    onSaveSuccess?.()
+
     startTransition(async () => {
       const result = await saveThirdPlacePicks(predictionId, [...selected])
-      if (result.ok) { setStatus("saved"); onSaveSuccess?.() }
-      else { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
+      if (!result.ok) { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
     })
   }
 

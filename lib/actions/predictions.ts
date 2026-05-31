@@ -57,15 +57,14 @@ export async function saveGroupStandings(
       return { ok: false, message: "Group predictions are locked" }
     }
 
-    for (const { groupId, teams } of groups) {
-      for (const { teamId, position } of teams) {
-        await prisma.groupStandingPrediction.upsert({
-          where: { predictionId_groupId_teamId: { predictionId, groupId, teamId } },
-          update: { predictedPosition: position },
-          create: { predictionId, groupId, teamId, predictedPosition: position },
-        })
-      }
-    }
+    await prisma.$transaction([
+      prisma.groupStandingPrediction.deleteMany({ where: { predictionId } }),
+      prisma.groupStandingPrediction.createMany({
+        data: groups.flatMap(({ groupId, teams }) =>
+          teams.map(({ teamId, position }) => ({ predictionId, groupId, teamId, predictedPosition: position }))
+        ),
+      }),
+    ])
 
     revalidatePath(`/predictions/${predictionId}/edit`)
     return { ok: true }
@@ -86,10 +85,12 @@ export async function saveThirdPlacePicks(
     }
     if (groupIds.length !== 8) return { ok: false, message: "Select exactly 8 groups" }
 
-    await prisma.thirdPlacePrediction.deleteMany({ where: { predictionId } })
-    await prisma.thirdPlacePrediction.createMany({
-      data: groupIds.map((groupId) => ({ predictionId, groupId })),
-    })
+    await prisma.$transaction([
+      prisma.thirdPlacePrediction.deleteMany({ where: { predictionId } }),
+      prisma.thirdPlacePrediction.createMany({
+        data: groupIds.map((groupId) => ({ predictionId, groupId })),
+      }),
+    ])
 
     revalidatePath(`/predictions/${predictionId}/edit`)
     return { ok: true }
