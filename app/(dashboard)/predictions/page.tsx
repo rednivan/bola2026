@@ -6,11 +6,16 @@ import { getCachedTournament, getCachedTournamentCounts } from "@/lib/cache"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Trophy, PlusCircle, ChevronRight, CheckCircle2, Circle } from "lucide-react"
+import { Trophy, PlusCircle, ChevronRight, CheckCircle2, Circle, Lock } from "lucide-react"
 
 async function getPredictionsData(userId: string) {
   const tournament = await getCachedTournament()
-  if (!tournament) return { predictions: [], matchTotal: 0, standingsTotal: 0, koTotal: 0 }
+  if (!tournament) return { predictions: [], matchTotal: 0, standingsTotal: 0, koTotal: 0, groupCount: 0, koLocked: true }
+
+  const now = new Date()
+  const groupStageEnded = now >= tournament.groupStageEnd
+  const koStageStarted = now >= tournament.knockoutStageStart
+  const koLocked = !groupStageEnded || koStageStarted
 
   const [predictions, counts] = await Promise.all([
     prisma.prediction.findMany({
@@ -34,7 +39,7 @@ async function getPredictionsData(userId: string) {
     getCachedTournamentCounts(tournament.id),
   ])
 
-  return { predictions, ...counts }
+  return { predictions, ...counts, koLocked }
 }
 
 export default async function PredictionsPage() {
@@ -43,8 +48,9 @@ export default async function PredictionsPage() {
   if (!session) redirect("/login")
   const user = session.user
 
-  const { predictions, matchTotal, standingsTotal, koTotal } = await getPredictionsData(user.id)
-  const totalItems = matchTotal + standingsTotal + 8 + koTotal
+  const { predictions, matchTotal, standingsTotal, koTotal, koLocked } = await getPredictionsData(user.id)
+  const groupOnlyTotal = matchTotal + standingsTotal + 8
+  const effectiveTotal = koLocked ? groupOnlyTotal : groupOnlyTotal + koTotal
 
   return (
     <div className="p-6 lg:p-8 space-y-6 text-white">
@@ -83,7 +89,7 @@ export default async function PredictionsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {predictions.map((p) => {
             const saved = p._count.matchPredictions + p._count.standingPredictions + p._count.thirdPlacePredictions
-            const pct = totalItems > 0 ? Math.round((saved / totalItems) * 100) : 0
+            const pct = effectiveTotal > 0 ? Math.min(100, Math.round((saved / effectiveTotal) * 100)) : 0
             const isComplete = p.status === "COMPLETE"
 
             return (
@@ -118,7 +124,7 @@ export default async function PredictionsPage() {
                       </div>
                       <div className="h-1.5 bg-[#1E2B6E] rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all ${isComplete ? "bg-[#3CAC3B]" : "bg-[#E61D25]"}`}
+                          className={`h-full rounded-full transition-all ${pct === 100 ? "bg-[#3CAC3B]" : "bg-[#E61D25]"}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -127,17 +133,21 @@ export default async function PredictionsPage() {
                     {/* Section checklist */}
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                       {[
-                        { label: "Match Results", done: p._count.matchPredictions >= matchTotal },
-                        { label: "Standings", done: p._count.standingPredictions >= standingsTotal },
-                        { label: "Third Place", done: p._count.thirdPlacePredictions >= 8 },
-                        { label: "KO Bracket", done: isComplete },
-                      ].map(({ label, done }) => (
+                        { label: "Match Results", done: p._count.matchPredictions >= matchTotal, locked: false },
+                        { label: "Standings", done: p._count.standingPredictions >= standingsTotal, locked: false },
+                        { label: "Third Place", done: p._count.thirdPlacePredictions >= 8, locked: false },
+                        { label: "KO Bracket", done: isComplete, locked: koLocked },
+                      ].map(({ label, done, locked }) => (
                         <div key={label} className="flex items-center gap-1.5">
                           {done
                             ? <CheckCircle2 className="w-3 h-3 text-[#3CAC3B] shrink-0" />
+                            : locked
+                            ? <Lock className="w-3 h-3 text-[#474A4A] shrink-0" />
                             : <Circle className="w-3 h-3 text-[#474A4A] shrink-0" />
                           }
-                          <span className={`text-xs ${done ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>{label}</span>
+                          <span className={`text-xs ${done ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
+                            {locked && !done ? "KO Bracket (opens later)" : label}
+                          </span>
                         </div>
                       ))}
                     </div>

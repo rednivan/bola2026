@@ -347,11 +347,16 @@ export function PredictionEditor({
   const filledPicks = Object.values(picks).filter(Boolean).length
   const filledKO = Object.values(koPicks).filter(Boolean).length
 
-  // Overall completion — based on what has been saved to the DB
-  const totalItems = matchTotal + standingsTotal + 8 + koMatches.length
-  const savedItems = savedMatchCount + savedStandingsCount + savedThirdPlaceCount + savedKOCount
-  const completionPct = totalItems > 0 ? Math.round((savedItems / totalItems) * 100) : 0
-  const isFullySubmitted = savedItems === totalItems && totalItems > 0
+  // Overall completion — based on what has been saved to the DB.
+  // When KO bracket is locked, group-only items are the 100% target. When Window 2
+  // opens and KO unlocks, the bar resets to ~80% (group items / total items).
+  const groupOnlyTotal = matchTotal + standingsTotal + 8
+  const savedGroupItems = savedMatchCount + savedStandingsCount + savedThirdPlaceCount
+  const savedItems = savedGroupItems + savedKOCount
+  const effectiveTotal = koLocked ? groupOnlyTotal : groupOnlyTotal + koMatches.length
+  const effectiveSaved = koLocked ? savedGroupItems : savedItems
+  const completionPct = effectiveTotal > 0 ? Math.round((effectiveSaved / effectiveTotal) * 100) : 0
+  const isFullySubmitted = effectiveTotal > 0 && effectiveSaved >= effectiveTotal
 
   const groupsWithThird = groups.map((g) => ({
     ...g,
@@ -388,8 +393,12 @@ export function PredictionEditor({
               <CheckCircle2 className="w-5 h-5 text-[#3CAC3B]" />
             </div>
             <div>
-              <p className="text-white font-bold text-base">Prediction fully submitted!</p>
-              <p className="text-[#3CAC3B] text-sm">All sections complete — good luck!</p>
+              <p className="text-white font-bold text-base">
+                {koLocked ? "Group stage complete!" : "Prediction fully submitted!"}
+              </p>
+              <p className="text-[#3CAC3B] text-sm">
+                {koLocked ? "KO bracket opens after the group stage — check back then." : "All sections complete — good luck!"}
+              </p>
             </div>
           </div>
         ) : (
