@@ -5,8 +5,9 @@ import { BrowseLeagues } from "./browse-leagues"
 
 export default async function BrowseLeaguesPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) redirect("/login")
+  const user = session.user
 
   const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
 

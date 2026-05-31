@@ -5,11 +5,11 @@ import { Sidebar } from "@/components/dashboard/sidebar"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
 
-  if (!authUser) redirect("/login")
+  if (!session) redirect("/login")
 
-  const user = await prisma.user.findUnique({ where: { id: authUser.id } })
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } })
   if (!user) redirect("/login")
 
   return (

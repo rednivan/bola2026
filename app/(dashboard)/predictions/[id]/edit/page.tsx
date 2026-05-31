@@ -88,8 +88,9 @@ export default async function EditPredictionPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) redirect("/login")
+  const user = session.user
 
   const { prediction, groups, groupMatches, koMatches, groupStandings, matchPredictions, koMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams } =
     await getPredictionData(id)

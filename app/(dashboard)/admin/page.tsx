@@ -5,8 +5,9 @@ import { AdminPanels, type MatchRow, type MatchdayStatus, type KOReminderStatus,
 
 export default async function AdminPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) redirect("/login")
+  const user = session.user
 
   const dbUser = await prisma.user.findUnique({ where: { id: user.id } })
   if (dbUser?.role !== "ADMIN") redirect("/dashboard")

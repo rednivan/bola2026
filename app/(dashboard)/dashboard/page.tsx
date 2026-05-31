@@ -67,8 +67,9 @@ const STAGE_LABEL: Record<string, string> = {
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-  if (!authUser) redirect("/login")
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) redirect("/login")
+  const authUser = session.user
 
   const [dbUser, data] = await Promise.all([
     prisma.user.findUnique({ where: { id: authUser.id } }),

@@ -9,8 +9,9 @@ import { Trophy } from "lucide-react"
 
 export default async function NewPredictionPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) redirect("/login")
+  const user = session.user
 
   return (
     <div className="p-6 lg:p-8 flex items-center justify-center min-h-[60vh]">

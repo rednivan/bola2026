@@ -39,8 +39,9 @@ async function getPredictionsData(userId: string) {
 
 export default async function PredictionsPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) redirect("/login")
+  const user = session.user
 
   const { predictions, matchTotal, standingsTotal, koTotal } = await getPredictionsData(user.id)
   const totalItems = matchTotal + standingsTotal + 8 + koTotal
