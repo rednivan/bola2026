@@ -41,11 +41,11 @@ async function getLeaguesData(userId: string) {
     getCachedTournamentCounts(tournament.id),
   ])
 
-  const totalItems = counts.matchTotal + counts.standingsTotal + 8 + counts.koTotal
+  const groupOnlyTotal = counts.matchTotal + counts.standingsTotal + 8
   const completedPredictions = predictions.filter((p) => {
-    if (p.status === "COMPLETE") return true
+    if (p.status === "COMPLETE" || p.status === "GROUP_COMPLETE") return true
     const saved = p._count.matchPredictions + p._count.standingPredictions + p._count.thirdPlacePredictions
-    return totalItems > 0 && saved >= totalItems
+    return groupOnlyTotal > 0 && saved >= groupOnlyTotal
   })
 
   return { predictions, completedPredictions, memberships }
@@ -83,7 +83,7 @@ export default async function LeaguesPage() {
       {completedPredictions.length === 0 && (
         <Card className="bg-amber-950/20 border-amber-700/50">
           <CardContent className="py-5 text-amber-300 text-sm">
-            You need a completed prediction before joining a league.{" "}
+            You need to complete the group stage (match picks, standings, and third-place qualifiers) before joining a league.{" "}
             <a href="/predictions" className="underline font-medium text-amber-200">
               Finish one first →
             </a>
