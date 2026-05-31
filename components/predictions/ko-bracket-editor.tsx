@@ -1,8 +1,8 @@
 "use client"
 
-import { useTransition, useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { format } from "date-fns"
-import { Save, CheckCircle2, AlertCircle, Loader2, Trophy, Shield, Star } from "lucide-react"
+import { Save, CheckCircle2, AlertCircle, Trophy, Shield, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { saveKOPredictions, saveJokerPick } from "@/lib/actions/predictions"
@@ -132,7 +132,6 @@ function KOMatchCard({ match, pick, resolvedHome, resolvedAway, onPick, locked }
 }
 
 export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, onSaveSuccess, resolvedTeams, locked, jokerMatchIds = {} }: Props) {
-  const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
 
@@ -160,9 +159,7 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
       else next[stage] = newMatchId
       return next
     })
-    startTransition(async () => {
-      await saveJokerPick(predictionId, stage, newMatchId ?? null)
-    })
+    saveJokerPick(predictionId, stage, newMatchId ?? null)
   }
 
   const matchesByStage = STAGE_ORDER.reduce<Record<string, KOMatch[]>>((acc, stage) => {
@@ -193,9 +190,7 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
 
     setStatus("saved")
     onSaveSuccess?.(payload.length)
-
-    startTransition(async () => {
-      const result = await saveKOPredictions(predictionId, payload)
+    saveKOPredictions(predictionId, payload).then(result => {
       if (!result.ok) { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
     })
   }
@@ -230,11 +225,8 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
                 <AlertCircle className="w-4 h-4" /> {errorMsg}
               </span>
             )}
-            <Button onClick={handleSave} disabled={isPending} className="bg-[#E61D25] hover:bg-[#CC1920] text-white">
-              {isPending
-                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…</>
-                : <><Save className="w-4 h-4 mr-2" /> Save bracket</>
-              }
+            <Button onClick={handleSave} className="bg-[#E61D25] hover:bg-[#CC1920] text-white">
+              <Save className="w-4 h-4 mr-2" /> Save bracket
             </Button>
           </div>
         )}

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
+import { useState } from "react"
+import { Save, CheckCircle2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { saveThirdPlacePicks } from "@/lib/actions/predictions"
@@ -25,7 +25,6 @@ const MAX_PICKS = 8
 
 export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, onSelectionChange, onSaveSuccess }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set(savedGroupIds))
-  const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
 
@@ -44,8 +43,7 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
     setStatus("saved")
     onSaveSuccess?.()
 
-    startTransition(async () => {
-      const result = await saveThirdPlacePicks(predictionId, [...selected])
+    saveThirdPlacePicks(predictionId, [...selected]).then(result => {
       if (!result.ok) { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
     })
   }
@@ -76,13 +74,10 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
             )}
             <Button
               onClick={handleSave}
-              disabled={isPending || selected.size !== MAX_PICKS}
+              disabled={selected.size !== MAX_PICKS}
               className="bg-[#E61D25] hover:bg-[#CC1920] text-white disabled:opacity-40"
             >
-              {isPending
-                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…</>
-                : <><Save className="w-4 h-4 mr-2" /> Save picks</>
-              }
+              <Save className="w-4 h-4 mr-2" /> Save picks
             </Button>
           </div>
         )}

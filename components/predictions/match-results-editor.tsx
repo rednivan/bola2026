@@ -1,6 +1,6 @@
 "use client"
 
-import { useTransition, useState } from "react"
+import { useState } from "react"
 import { format } from "date-fns"
 import { Save, CheckCircle2, AlertCircle, Loader2, Star, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -92,7 +92,6 @@ function MatchRow({
 }
 
 export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPickChange, onSaveSuccess, locked, jokerMatchId }: Props) {
-  const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
   const [currentJoker, setCurrentJoker] = useState<string | null>(jokerMatchId)
@@ -103,9 +102,7 @@ export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPick
     if (locked) return
     const newMatchId = currentJoker === matchId ? null : matchId
     setCurrentJoker(newMatchId)
-    startTransition(async () => {
-      await saveJokerPick(predictionId, "GROUP", newMatchId)
-    })
+    saveJokerPick(predictionId, "GROUP", newMatchId)
   }
 
   async function handleJules() {
@@ -147,16 +144,10 @@ export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPick
       }
     }
 
-    // Optimistic: show saved immediately, persist in background
     setStatus("saved")
     onSaveSuccess?.(payload.length)
-
-    startTransition(async () => {
-      const result = await saveMatchPredictions(predictionId, payload)
-      if (!result.ok) {
-        setStatus("error")
-        setErrorMsg(result.message ?? "Failed to save")
-      }
+    saveMatchPredictions(predictionId, payload).then(result => {
+      if (!result.ok) { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
     })
   }
 
@@ -184,7 +175,7 @@ export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPick
             <div className="flex items-center gap-2">
               <Button
                 onClick={handleJules}
-                disabled={julesLoading || isPending}
+                disabled={julesLoading}
                 variant="outline"
                 className="border-[#2A398D] bg-[#0D1333] text-[#D1D4D1] hover:bg-[#2A398D] hover:text-white text-sm"
               >
@@ -203,11 +194,8 @@ export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPick
                   <AlertCircle className="w-4 h-4" /> {errorMsg}
                 </span>
               )}
-              <Button onClick={handleSave} disabled={isPending} className="bg-[#E61D25] hover:bg-[#CC1920] text-white">
-                {isPending
-                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…</>
-                  : <><Save className="w-4 h-4 mr-2" /> Save results</>
-                }
+              <Button onClick={handleSave} className="bg-[#E61D25] hover:bg-[#CC1920] text-white">
+                <Save className="w-4 h-4 mr-2" /> Save results
               </Button>
             </div>
             {julesMsg && (

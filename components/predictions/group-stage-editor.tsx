@@ -1,6 +1,6 @@
 "use client"
 
-import { useTransition, useState } from "react"
+import { useState } from "react"
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
   useSensor, useSensors, type DragEndEvent,
@@ -10,7 +10,7 @@ import {
   useSortable, arrayMove,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { GripVertical, Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
+import { GripVertical, Save, CheckCircle2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { saveGroupStandings, type GroupPredictionData } from "@/lib/actions/predictions"
@@ -107,7 +107,6 @@ type Props = {
 }
 
 export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder, onSaveSuccess, locked }: Props) {
-  const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
 
@@ -119,9 +118,7 @@ export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder,
 
     setStatus("saved")
     onSaveSuccess?.()
-
-    startTransition(async () => {
-      const result = await saveGroupStandings(predictionId, payload)
+    saveGroupStandings(predictionId, payload).then(result => {
       if (!result.ok) { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
     })
   }
@@ -148,11 +145,8 @@ export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder,
                 <AlertCircle className="w-4 h-4" /> {errorMsg}
               </span>
             )}
-            <Button onClick={handleSave} disabled={isPending} className="bg-[#E61D25] hover:bg-[#CC1920] text-white">
-              {isPending
-                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…</>
-                : <><Save className="w-4 h-4 mr-2" /> Save standings</>
-              }
+            <Button onClick={handleSave} className="bg-[#E61D25] hover:bg-[#CC1920] text-white">
+              <Save className="w-4 h-4 mr-2" /> Save standings
             </Button>
           </div>
         )}
