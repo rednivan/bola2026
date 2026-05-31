@@ -115,13 +115,16 @@ export async function saveMatchPredictions(
       return { ok: false, message: "Group predictions are locked" }
     }
 
-    for (const { matchId, predictedWinnerId, isDraw } of predictions) {
-      await prisma.matchPrediction.upsert({
-        where: { predictionId_matchId: { predictionId, matchId } },
-        update: { predictedWinnerId, isDraw },
-        create: { predictionId, matchId, predictedWinnerId, isDraw },
-      })
-    }
+    await prisma.$transaction([
+      prisma.matchPrediction.deleteMany({
+        where: { predictionId, match: { stage: "GROUP" } },
+      }),
+      prisma.matchPrediction.createMany({
+        data: predictions.map(({ matchId, predictedWinnerId, isDraw }) => ({
+          predictionId, matchId, predictedWinnerId, isDraw,
+        })),
+      }),
+    ])
 
     revalidatePath(`/predictions/${predictionId}/edit`)
     return { ok: true }
@@ -142,13 +145,16 @@ export async function saveKOPredictions(
       return { ok: false, message: "KO predictions are locked" }
     }
 
-    for (const { matchId, predictedWinnerId, isDraw } of predictions) {
-      await prisma.matchPrediction.upsert({
-        where: { predictionId_matchId: { predictionId, matchId } },
-        update: { predictedWinnerId, isDraw },
-        create: { predictionId, matchId, predictedWinnerId, isDraw },
-      })
-    }
+    await prisma.$transaction([
+      prisma.matchPrediction.deleteMany({
+        where: { predictionId, match: { stage: { in: ["R32", "R16", "QF", "SF", "THIRD_PLACE", "FINAL"] } } },
+      }),
+      prisma.matchPrediction.createMany({
+        data: predictions.map(({ matchId, predictedWinnerId, isDraw }) => ({
+          predictionId, matchId, predictedWinnerId, isDraw,
+        })),
+      }),
+    ])
 
     const koTotal = await prisma.match.count({
       where: {
