@@ -158,7 +158,7 @@ function computeKOBracket(
   thirdPlaceGroupIds: Set<string>,
   koPicks: Record<string, KOPick>
 ): Record<string, { home: Team | null; away: Team | null }> {
-  const byDate = (ms: KOMatch[]) => [...ms].sort((a, b) => a.kickoff.getTime() - b.kickoff.getTime())
+  const byDate = (ms: KOMatch[]) => [...ms].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
 
   const r32 = byDate(koMatches.filter((m) => m.stage === "R32"))
   const r16 = byDate(koMatches.filter((m) => m.stage === "R16"))

@@ -163,7 +163,7 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
   }
 
   const matchesByStage = STAGE_ORDER.reduce<Record<string, KOMatch[]>>((acc, stage) => {
-    acc[stage] = koMatches.filter((m) => m.stage === stage).sort((a, b) => a.kickoff.getTime() - b.kickoff.getTime())
+    acc[stage] = koMatches.filter((m) => m.stage === stage).sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
     return acc
   }, {})
 
