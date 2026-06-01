@@ -23,20 +23,32 @@ async function getPrediction(predictionId: string, userId: string) {
   return prediction
 }
 
-export async function createPrediction(formData: FormData) {
+export async function createPrediction(
+  _prev: { error?: string },
+  formData: FormData
+): Promise<{ error?: string }> {
   const userId = await getAuthUserId()
-  const name = (formData.get("name") as string)?.trim()
+  const name = (formData.get("name") as string)?.trim() || "My Prediction"
 
   const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
-  if (!tournament) throw new Error("Tournament not found — run seed first")
+  if (!tournament) return { error: "Tournament not found — contact an admin." }
 
   if (isPast(tournament.groupStageStart)) {
-    throw new Error("Group stage has started — predictions are closed")
+    return { error: "Group stage has started — predictions are closed." }
   }
 
-  const prediction = await prisma.prediction.create({
-    data: { userId, tournamentId: tournament.id, name: name || "My Prediction" },
-  })
+  let prediction
+  try {
+    prediction = await prisma.prediction.create({
+      data: { userId, tournamentId: tournament.id, name },
+    })
+  } catch (e: unknown) {
+    const code = (e as { code?: string })?.code
+    if (code === "P2002") {
+      return { error: `You already have a prediction called "${name}". Choose a different name.` }
+    }
+    return { error: "Something went wrong — please try again." }
+  }
 
   redirect(`/predictions/${prediction.id}/edit`)
 }

@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+"use client"
+
+import { useActionState } from "react"
 import { createPrediction } from "@/lib/actions/predictions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -7,11 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Trophy } from "lucide-react"
 
-export default async function NewPredictionPage() {
-  const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect("/login")
-  const user = session.user
+export default function NewPredictionPage() {
+  const [state, action, pending] = useActionState(createPrediction, {})
 
   return (
     <div className="p-6 lg:p-8 flex items-center justify-center min-h-[60vh]">
@@ -28,7 +26,12 @@ export default async function NewPredictionPage() {
           </p>
         </CardHeader>
         <CardContent>
-          <form action={createPrediction} className="space-y-4">
+          {state?.error && (
+            <p className="text-sm text-white bg-[#E61D25]/20 border border-[#E61D25]/50 px-3 py-2 rounded-md mb-4">
+              {state.error}
+            </p>
+          )}
+          <form action={action} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name" className="text-[#D1D4D1]">Prediction name</Label>
               <Input
@@ -39,8 +42,8 @@ export default async function NewPredictionPage() {
                 className="bg-[#1A2560] border-[#1E2B6E] text-white placeholder:text-[#474A4A] focus:border-[#E61D25]"
               />
             </div>
-            <Button type="submit" className="w-full bg-[#E61D25] hover:bg-[#CC1920] text-white font-semibold">
-              Start predicting →
+            <Button type="submit" disabled={pending} className="w-full bg-[#E61D25] hover:bg-[#CC1920] text-white font-semibold">
+              {pending ? "Creating…" : "Start predicting →"}
             </Button>
           </form>
         </CardContent>
