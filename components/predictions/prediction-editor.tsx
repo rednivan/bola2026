@@ -464,39 +464,46 @@ export function PredictionEditor({
       }
       setActiveTab(v as TabValue)
     }} className="space-y-6">
-      <TabsList className="bg-[#0D1333] border border-[#1E2B6E] p-1 h-auto flex-nowrap overflow-x-auto w-full [scrollbar-width:none] [-webkit-overflow-scrolling:touch]">
+      {/* Scroll wrapper is a plain div — keeps Radix's scrollIntoView from fighting user scroll */}
+      <div className="overflow-x-auto [scrollbar-width:none] [-webkit-overflow-scrolling:touch]">
+      <TabsList className="bg-[#0D1333] border border-[#1E2B6E] p-1 h-auto w-max min-w-full">
         <TabsTrigger
           value="matches"
-          className="data-[state=active]:bg-[#2A398D] data-[state=active]:text-white text-[#D1D4D1]/60 rounded-md px-4 py-2 text-sm font-medium"
+          className="data-[state=active]:bg-[#2A398D] data-[state=active]:text-white text-[#D1D4D1]/60 rounded-md px-3 py-2 text-sm font-medium flex-none"
         >
-          Match Results
+          <span className="sm:hidden">Matches</span>
+          <span className="hidden sm:inline">Match Results</span>
           {badge(filledPicks, matchTotal)}
         </TabsTrigger>
 
         <TabsTrigger
           value="standings"
-          className="data-[state=active]:bg-[#2A398D] data-[state=active]:text-white text-[#D1D4D1]/60 rounded-md px-4 py-2 text-sm font-medium"
+          className="data-[state=active]:bg-[#2A398D] data-[state=active]:text-white text-[#D1D4D1]/60 rounded-md px-3 py-2 text-sm font-medium flex-none"
         >
-          Group Standings
+          <span className="sm:hidden">Standings</span>
+          <span className="hidden sm:inline">Group Standings</span>
           {badge(savedStandingsCount, standingsTotal)}
         </TabsTrigger>
 
         <TabsTrigger
           value="thirdplace"
-          className="data-[state=active]:bg-[#2A398D] data-[state=active]:text-white text-[#D1D4D1]/60 rounded-md px-4 py-2 text-sm font-medium"
+          className="data-[state=active]:bg-[#2A398D] data-[state=active]:text-white text-[#D1D4D1]/60 rounded-md px-3 py-2 text-sm font-medium flex-none"
         >
-          Third Place
+          <span className="sm:hidden">3rd Place</span>
+          <span className="hidden sm:inline">Third Place</span>
           {badge(thirdPlaceGroupIds.size, 8)}
         </TabsTrigger>
 
         <TabsTrigger
           value="ko"
-          className="data-[state=active]:bg-[#2A398D] data-[state=active]:text-white text-[#D1D4D1]/60 rounded-md px-4 py-2 text-sm font-medium"
+          className="data-[state=active]:bg-[#2A398D] data-[state=active]:text-white text-[#D1D4D1]/60 rounded-md px-3 py-2 text-sm font-medium flex-none"
         >
-          KO Bracket
+          <span className="sm:hidden">KO</span>
+          <span className="hidden sm:inline">KO Bracket</span>
           {badge(filledKO, koMatches.length)}
         </TabsTrigger>
       </TabsList>
+      </div>
 
       <TabsContent value="matches" className="mt-0">
         <MatchResultsEditor
