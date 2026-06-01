@@ -41,11 +41,15 @@ async function getPredictionData(predictionId: string) {
       }),
     ])
 
-  const koMatchIds = new Set(koMatches.map((m) => m.id))
+  // unstable_cache serialises through JSON, so Date fields come back as strings — restore them
+  const groupMatchesHydrated = groupMatches.map((m) => ({ ...m, kickoff: new Date(m.kickoff) }))
+  const koMatchesHydrated = koMatches.map((m) => ({ ...m, kickoff: new Date(m.kickoff) }))
+
+  const koMatchIds = new Set(koMatchesHydrated.map((m) => m.id))
   const matchPredictions = allMatchPredictions.filter((mp) => !koMatchIds.has(mp.matchId))
   const koMatchPredictions = allMatchPredictions.filter((mp) => koMatchIds.has(mp.matchId))
 
-  return { prediction, groups, groupMatches, koMatches, groupStandings, matchPredictions, koMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams }
+  return { prediction, groups, groupMatches: groupMatchesHydrated, koMatches: koMatchesHydrated, groupStandings, matchPredictions, koMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams }
 }
 
 export default async function EditPredictionPage({
