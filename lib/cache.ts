@@ -55,6 +55,48 @@ export const getCachedGroupMatches = unstable_cache(
   { revalidate: 86400 },
 )
 
+// User profile — displayName and role rarely change; cached per-user for 60 s
+// so layout and page components share one DB hit per request window
+export const getCachedUser = unstable_cache(
+  (userId: string) => prisma.user.findUnique({ where: { id: userId } }),
+  ["user"],
+  { revalidate: 60 },
+)
+
+// Upcoming matches — next 5 matches with kickoff in the future.
+// new Date() is evaluated at cache-population time; 5-min TTL keeps it fresh enough.
+export const getCachedUpcomingMatches = unstable_cache(
+  (tournamentId: string) => prisma.match.findMany({
+    where: { tournamentId, kickoff: { gt: new Date() }, homeTeamId: { not: null }, homeScore: null },
+    include: {
+      homeTeam: { select: { name: true, code: true, flagUrl: true } },
+      awayTeam: { select: { name: true, code: true, flagUrl: true } },
+      group: { select: { letter: true } },
+    },
+    orderBy: { kickoff: "asc" },
+    take: 5,
+  }),
+  ["upcoming-matches"],
+  { revalidate: 300 },
+)
+
+// Recent results — last 5 completed matches.
+// Revalidate every 60 s so newly-entered scores appear quickly.
+export const getCachedRecentMatches = unstable_cache(
+  (tournamentId: string) => prisma.match.findMany({
+    where: { tournamentId, homeScore: { not: null }, homeTeamId: { not: null } },
+    include: {
+      homeTeam: { select: { name: true, code: true } },
+      awayTeam: { select: { name: true, code: true } },
+      group: { select: { letter: true } },
+    },
+    orderBy: { kickoff: "desc" },
+    take: 5,
+  }),
+  ["recent-matches"],
+  { revalidate: 60 },
+)
+
 // KO matches — includes homeScore/awayScore/winnerId which update during the tournament,
 // so revalidate every 5 minutes to keep results fresh without hammering the DB
 export const getCachedKOMatches = unstable_cache(

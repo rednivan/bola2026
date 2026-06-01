@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { prisma } from "@/lib/prisma"
+import { getCachedUser } from "@/lib/cache"
 import { Sidebar } from "@/components/dashboard/sidebar"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -9,7 +9,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!session) redirect("/login")
 
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } })
+  const user = await getCachedUser(session.user.id)
   if (!user) redirect("/login")
 
   return (

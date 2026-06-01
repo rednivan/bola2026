@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
-import { getCachedTournament } from "@/lib/cache"
+import { getCachedTournament, getCachedUser, getCachedUpcomingMatches, getCachedRecentMatches } from "@/lib/cache"
 import { formatDistanceToNow, format, isPast } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -12,49 +12,28 @@ import Link from "next/link"
 import { HowToGuide } from "@/components/how-to-guide"
 
 async function getDashboardData(userId: string) {
-  const [tournament, predictions, leagues, upcomingMatches, recentMatches] = await Promise.all([
-    getCachedTournament(),
+  // Phase 1: tournament ID from cache (~0 ms) — needed to avoid JOIN filters below
+  const tournament = await getCachedTournament()
+  if (!tournament) return { tournament: null, predictions: [], leagues: [], upcomingMatches: [], recentMatches: [] }
 
+  // Phase 2: user-specific queries use tournamentId directly (no JOIN);
+  // match queries are served from cache
+  const [predictions, leagues, upcomingMatches, recentMatches] = await Promise.all([
     prisma.prediction.findMany({
-      where: { userId, tournament: { year: 2026 } },
+      where: { userId, tournamentId: tournament.id },
       select: { id: true, name: true, status: true, totalScore: true, matchAccuracy: true },
       orderBy: { name: "asc" },
     }),
-
     prisma.leagueMembership.findMany({
-      where: { prediction: { userId, tournament: { year: 2026 } } },
+      where: { prediction: { userId, tournamentId: tournament.id } },
       include: {
         league: { select: { id: true, name: true } },
         prediction: { select: { totalScore: true } },
       },
       take: 3,
     }),
-
-    prisma.match.findMany({
-      where: { tournament: { year: 2026 }, kickoff: { gt: new Date() }, homeTeamId: { not: null }, homeScore: null },
-      include: {
-        homeTeam: { select: { name: true, code: true, flagUrl: true } },
-        awayTeam: { select: { name: true, code: true, flagUrl: true } },
-        group: { select: { letter: true } },
-      },
-      orderBy: { kickoff: "asc" },
-      take: 5,
-    }),
-
-    prisma.match.findMany({
-      where: {
-        tournament: { year: 2026 },
-        homeScore: { not: null },
-        homeTeamId: { not: null },
-      },
-      include: {
-        homeTeam: { select: { name: true, code: true } },
-        awayTeam: { select: { name: true, code: true } },
-        group: { select: { letter: true } },
-      },
-      orderBy: { kickoff: "desc" },
-      take: 5,
-    }),
+    getCachedUpcomingMatches(tournament.id),
+    getCachedRecentMatches(tournament.id),
   ])
 
   return { tournament, predictions, leagues, upcomingMatches, recentMatches }
@@ -72,7 +51,7 @@ export default async function DashboardPage() {
   const authUser = session.user
 
   const [dbUser, data] = await Promise.all([
-    prisma.user.findUnique({ where: { id: authUser.id } }),
+    getCachedUser(authUser.id),
     getDashboardData(authUser.id),
   ])
   if (!dbUser) redirect("/login")
