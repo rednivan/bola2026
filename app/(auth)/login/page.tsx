@@ -28,6 +28,11 @@ export default function LoginPage() {
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {state?.warning && (
+          <p className="text-sm text-amber-200 bg-amber-900/30 border border-amber-600/50 px-3 py-2 rounded-md">
+            {state.warning}
+          </p>
+        )}
         {state?.error && (
           <p className="text-sm text-white bg-[#E61D25]/20 border border-[#E61D25]/50 px-3 py-2 rounded-md">
             {state.error}

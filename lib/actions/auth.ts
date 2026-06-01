@@ -20,6 +20,8 @@ const loginSchema = z.object({
 export type AuthState = {
   error?: string
   fieldErrors?: Record<string, string[]>
+  success?: boolean
+  warning?: string
 }
 
 export async function register(
@@ -39,7 +41,11 @@ export async function register(
   const { displayName, email, password } = parsed.data
   const supabase = await createClient()
 
-  const { data, error } = await supabase.auth.signUp({ email, password })
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback` },
+  })
 
   if (error) return { error: error.message }
 
@@ -61,6 +67,9 @@ export async function register(
     return { fieldErrors: { email: ["An account with this email already exists"] } }
   }
 
+  // session is null when Supabase requires email confirmation — don't redirect to dashboard yet
+  if (!data.session) return { success: true }
+
   revalidatePath("/", "layout")
   redirect("/dashboard")
 }
@@ -81,7 +90,12 @@ export async function login(
   const supabase = await createClient()
   const { error } = await supabase.auth.signInWithPassword(parsed.data)
 
-  if (error) return { error: "Invalid email or password" }
+  if (error) {
+    if (error.message === "Email not confirmed") {
+      return { warning: "Please check your inbox and click the confirmation link before signing in." }
+    }
+    return { error: "Invalid email or password" }
+  }
 
   revalidatePath("/", "layout")
   redirect("/dashboard")

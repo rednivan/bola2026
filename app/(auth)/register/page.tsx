@@ -28,6 +28,19 @@ export default function RegisterPage() {
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {state?.success ? (
+          <div className="text-center py-4 space-y-3">
+            <div className="w-14 h-14 rounded-full bg-[#3CAC3B]/20 border border-[#3CAC3B]/40 flex items-center justify-center mx-auto text-2xl">
+              📧
+            </div>
+            <p className="text-white font-semibold text-base">Check your inbox!</p>
+            <p className="text-[#D1D4D1]/70 text-sm leading-relaxed">
+              We sent a confirmation link to your email address. Click it to activate your account, then come back to sign in.
+            </p>
+            <p className="text-[#474A4A] text-xs">Didn't get it? Check your spam folder.</p>
+          </div>
+        ) : (
+        <>
         {state?.error && (
           <p className="text-sm text-white bg-[#E61D25]/20 border border-[#E61D25]/50 px-3 py-2 rounded-md">
             {state.error}
@@ -108,6 +121,8 @@ export default function RegisterPage() {
             Continue with Google
           </Button>
         </form>
+        </>
+        )}
       </CardContent>
 
       <CardFooter className="justify-center border-t border-[#1E2B6E] pt-4">
