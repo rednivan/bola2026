@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { getCachedGroups, getCachedGroupMatches, getCachedKOMatches } from "@/lib/cache"
 import { PredictionEditor } from "@/components/predictions/prediction-editor"
 import { HowToGuide } from "@/components/how-to-guide"
 import { DeletePredictionButton } from "@/components/predictions/delete-prediction-button"
@@ -9,64 +10,26 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Trophy, Lock, Clock } from "lucide-react"
 
 async function getPredictionData(predictionId: string) {
-  const [prediction, groups, groupMatches, koMatches, groupStandings, matchPredictions, koMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams] =
+  // Static tournament data served from Next.js cache — no DB hit on warm loads
+  const [groups, groupMatches, koMatches] = await Promise.all([
+    getCachedGroups(),
+    getCachedGroupMatches(),
+    getCachedKOMatches(),
+  ])
+
+  // User-specific data: 5 queries instead of 7 (no JOIN filters needed)
+  const [prediction, groupStandings, allMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams] =
     await Promise.all([
       prisma.prediction.findUnique({
         where: { id: predictionId },
         include: { tournament: true },
       }),
-
-      prisma.tournamentGroup.findMany({
-        where: { tournament: { year: 2026 } },
-        include: {
-          teams: { include: { team: { select: { id: true, name: true, code: true, flagUrl: true } } } },
-        },
-        orderBy: { letter: "asc" },
-      }),
-
-      prisma.match.findMany({
-        where: { tournament: { year: 2026 }, stage: "GROUP" },
-        select: {
-          id: true,
-          groupId: true,
-          kickoff: true,
-          homeTeam: { select: { id: true, name: true, code: true, flagUrl: true } },
-          awayTeam: { select: { id: true, name: true, code: true, flagUrl: true } },
-          group: { select: { letter: true } },
-        },
-        orderBy: [{ group: { letter: "asc" } }, { kickoff: "asc" }],
-      }),
-
-      prisma.match.findMany({
-        where: { tournament: { year: 2026 }, stage: { in: ["R32", "R16", "QF", "SF", "THIRD_PLACE", "FINAL"] } },
-        select: {
-          id: true,
-          stage: true,
-          matchNumber: true,
-          kickoff: true,
-          pointsAvailable: true,
-          homeTeam: { select: { id: true, name: true, code: true, flagUrl: true } },
-          awayTeam: { select: { id: true, name: true, code: true, flagUrl: true } },
-          homeTeamPlaceholder: true,
-          awayTeamPlaceholder: true,
-          homeScore: true,
-          awayScore: true,
-          winnerId: true,
-        },
-        orderBy: [{ kickoff: "asc" }, { matchNumber: "asc" }],
-      }),
-
       prisma.groupStandingPrediction.findMany({ where: { predictionId } }),
-      prisma.matchPrediction.findMany({
-        where: { predictionId, match: { stage: "GROUP" } },
-      }),
-      prisma.matchPrediction.findMany({
-        where: { predictionId, match: { stage: { in: ["R32", "R16", "QF", "SF", "THIRD_PLACE", "FINAL"] } } },
-      }),
+      // Fetch all match predictions in one direct index lookup, split client-side
+      // using the cached KO match IDs — avoids two slow JOIN queries
+      prisma.matchPrediction.findMany({ where: { predictionId } }),
       prisma.thirdPlacePrediction.findMany({ where: { predictionId } }),
       prisma.jokerPick.findMany({ where: { predictionId } }),
-
-      // Actual group standings — populated by admin after group stage ends
       prisma.groupTeam.findMany({
         where: { group: { tournament: { year: 2026 } }, actualPosition: { not: null } },
         select: {
@@ -77,6 +40,10 @@ async function getPredictionData(predictionId: string) {
         orderBy: [{ groupId: "asc" }, { actualPosition: "asc" }],
       }),
     ])
+
+  const koMatchIds = new Set(koMatches.map((m) => m.id))
+  const matchPredictions = allMatchPredictions.filter((mp) => !koMatchIds.has(mp.matchId))
+  const koMatchPredictions = allMatchPredictions.filter((mp) => koMatchIds.has(mp.matchId))
 
   return { prediction, groups, groupMatches, koMatches, groupStandings, matchPredictions, koMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams }
 }
