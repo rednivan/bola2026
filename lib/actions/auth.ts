@@ -54,14 +54,14 @@ export async function register(
     return { fieldErrors: { email: ["An account with this email already exists"] } }
   }
 
+  // Supabase accepted the signup, so any existing Prisma record with this email
+  // is an orphan left over from a previously deleted Supabase user — remove it
+  // before creating the new one.
+  await prisma.user.deleteMany({ where: { email, NOT: { id: data.user.id } } })
+
   try {
     await prisma.user.create({
-      data: {
-        id: data.user.id,
-        email,
-        displayName,
-        role: "PLAYER",
-      },
+      data: { id: data.user.id, email, displayName, role: "PLAYER" },
     })
   } catch {
     return { fieldErrors: { email: ["An account with this email already exists"] } }
