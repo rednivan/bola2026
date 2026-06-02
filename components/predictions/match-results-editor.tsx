@@ -163,9 +163,9 @@ export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPick
             Tap <Star className="inline w-3.5 h-3.5 text-amber-400 fill-amber-400 mx-0.5" /> to mark your joker — doubles points if correct.
           </p>
           {!locked && (
-            <p className="text-[#474A4A] text-xs mt-1">
+            <p className="text-[#D1D4D1]/70 text-xs mt-1">
               <Sparkles className="inline w-3 h-3 text-amber-400 mr-0.5" />
-              Use <span className="text-[#D1D4D1]/60">Help me predict, Jules!</span> to pre-fill all picks from live match odds — then change any you disagree with.
+              Use <span className="text-amber-400 font-medium">Help me predict, Jules!</span> to pre-fill all picks from live match odds — then change any you disagree with.
             </p>
           )}
         </div>

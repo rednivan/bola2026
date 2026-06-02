@@ -131,6 +131,9 @@ export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder,
           <p className="text-[#D1D4D1]/60 text-sm mt-0.5">
             Standings update automatically from your match results. Drag to break ties manually.
           </p>
+          <p className="text-[#D1D4D1]/50 text-xs mt-1">
+            Points are awarded for each correctly predicted finishing position — so the difference between 1st and 2nd matters. The group winner also faces a different opponent in the Round of 32, which can affect your knockout points too.
+          </p>
         </div>
 
         {!locked && (
