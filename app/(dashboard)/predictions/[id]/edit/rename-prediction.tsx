@@ -7,7 +7,7 @@ import { renamePrediction } from "@/lib/actions/predictions"
 export function RenamePrediction({ predictionId, initialName }: { predictionId: string; initialName: string }) {
   const [editing, setEditing] = useState(false)
   const [displayName, setDisplayName] = useState(initialName)
-  const [state, action, pending] = useActionState(renamePrediction, {})
+  const [state, action, pending] = useActionState(renamePrediction, { ok: false, message: "" })
   const inputRef = useRef<HTMLInputElement>(null)
 
   // On successful save, update displayed name and close editor
