@@ -28,7 +28,7 @@ export async function updateDisplayName(
       data: { displayName: parsed.data },
     })
 
-    revalidateTag("user")
+    revalidateTag("user", {})
     revalidatePath("/profile")
     revalidatePath("/dashboard")
     return { ok: true, message: "Display name updated." }
