@@ -58,7 +58,7 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
           <p className="text-[#D1D4D1]/60 text-sm mt-0.5">
             Select 8 of the 12 third-place finishers you predict will advance to the Round of 32.
           </p>
-          <p className="text-[#D1D4D1]/50 text-xs mt-1">
+          <p className="text-[#D1D4D1]/70 text-xs mt-1">
             In 2026, every group produces a 3rd-place team — but only the 8 with the best records across all groups qualify. You score points for each group you correctly include or exclude.
           </p>
         </div>
