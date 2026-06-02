@@ -56,11 +56,12 @@ export const getCachedGroupMatches = unstable_cache(
 )
 
 // User profile — displayName and role rarely change; cached per-user for 60 s
-// so layout and page components share one DB hit per request window
+// so layout and page components share one DB hit per request window.
+// Tagged "user" so updateDisplayName can call revalidateTag("user") for instant refresh.
 export const getCachedUser = unstable_cache(
   (userId: string) => prisma.user.findUnique({ where: { id: userId } }),
   ["user"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: ["user"] },
 )
 
 // Upcoming matches — next 5 matches with kickoff in the future.

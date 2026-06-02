@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
@@ -28,6 +28,7 @@ export async function updateDisplayName(
       data: { displayName: parsed.data },
     })
 
+    revalidateTag("user")
     revalidatePath("/profile")
     revalidatePath("/dashboard")
     return { ok: true, message: "Display name updated." }

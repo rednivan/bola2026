@@ -23,6 +23,32 @@ async function getPrediction(predictionId: string, userId: string) {
   return prediction
 }
 
+export async function renamePrediction(
+  _prev: { ok?: boolean; message?: string },
+  formData: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  const userId = await getAuthUserId()
+  const predictionId = formData.get("predictionId") as string
+  const name = (formData.get("name") as string)?.trim()
+
+  if (!name) return { ok: false, message: "Name cannot be empty." }
+  if (name.length > 50) return { ok: false, message: "Name must be 50 characters or less." }
+
+  try {
+    await prisma.prediction.update({
+      where: { id: predictionId, userId },
+      data: { name },
+    })
+    revalidatePath("/predictions")
+    return { ok: true, message: name }
+  } catch (e: unknown) {
+    if ((e as { code?: string })?.code === "P2002") {
+      return { ok: false, message: `You already have a prediction called "${name}".` }
+    }
+    return { ok: false, message: "Failed to rename prediction." }
+  }
+}
+
 export async function createPrediction(
   _prev: { error?: string },
   formData: FormData

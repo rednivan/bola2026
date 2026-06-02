@@ -5,6 +5,7 @@ import { getCachedGroups, getCachedGroupMatches, getCachedKOMatches } from "@/li
 import { PredictionEditor } from "@/components/predictions/prediction-editor"
 import { HowToGuide } from "@/components/how-to-guide"
 import { DeletePredictionButton } from "@/components/predictions/delete-prediction-button"
+import { RenamePrediction } from "./rename-prediction"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Trophy, Lock, Clock } from "lucide-react"
@@ -135,7 +136,7 @@ export default async function EditPredictionPage({
             <div className="w-8 h-8 rounded-full bg-[#E61D25] flex items-center justify-center">
               <Trophy className="w-4 h-4 text-white" />
             </div>
-            <h1 className="text-2xl font-bold">{prediction.name}</h1>
+            <RenamePrediction predictionId={prediction.id} initialName={prediction.name} />
             <Badge className={
               prediction.status === "COMPLETE" ? "bg-[#3CAC3B] text-white" :
               prediction.status === "GROUP_COMPLETE" ? "bg-[#2A398D] text-white" :
