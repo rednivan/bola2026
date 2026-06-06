@@ -175,6 +175,7 @@ export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPick
             <span className="font-mono font-bold text-white">X</span> draw ·{" "}
             <span className="font-mono font-bold text-white">2</span> away win.
             Tap <Star className="inline w-3.5 h-3.5 text-amber-400 fill-amber-400 mx-0.5" /> to mark your joker — doubles points if correct.
+            Tap a team name to see the full country name.
           </p>
           {!locked && (
             <p className="text-[#D1D4D1]/70 text-xs mt-1">
