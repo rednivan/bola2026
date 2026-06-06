@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
-import { AdminPanels, type MatchRow, type MatchdayStatus, type KOReminderStatus, type TournamentDates, type GroupData, type CronActivity } from "./admin-panels"
+import { AdminPanels, type MatchRow, type MatchdayStatus, type KOReminderStatus, type TournamentDates, type GroupData, type CronActivity, type UserRow } from "./admin-panels"
 
 export default async function AdminPage() {
   const supabase = await createClient()
@@ -17,7 +17,7 @@ export default async function AdminPage() {
   const todayStart = new Date()
   todayStart.setUTCHours(0, 0, 0, 0)
 
-  const [rawMatches, emailLogs, koReminderLogs, rawGroups, cronLogs, emailsSentToday] = await Promise.all([
+  const [rawMatches, emailLogs, koReminderLogs, rawGroups, cronLogs, emailsSentToday, rawUsers] = await Promise.all([
     tournament
       ? prisma.match.findMany({
           where: { tournamentId: tournament.id },
@@ -80,6 +80,23 @@ export default async function AdminPage() {
           },
         })
       : Promise.resolve(0),
+
+    tournament
+      ? prisma.user.findMany({
+          select: {
+            id: true, displayName: true, email: true, role: true, createdAt: true,
+            predictions: {
+              where: { tournamentId: tournament.id },
+              select: { id: true, status: true, _count: { select: { leagueMemberships: true } } },
+            },
+            createdLeagues: {
+              where: { tournamentId: tournament.id },
+              select: { id: true },
+            },
+          },
+          orderBy: { displayName: "asc" },
+        })
+      : Promise.resolve([]),
   ])
 
   const matches: MatchRow[] = rawMatches.map((m) => ({
@@ -160,6 +177,18 @@ export default async function AdminPage() {
     emailsSentToday,
   }
 
+  const users: UserRow[] = rawUsers.map((u) => ({
+    id: u.id,
+    displayName: u.displayName,
+    email: u.email,
+    role: u.role,
+    createdAt: u.createdAt,
+    hasPrediction: u.predictions.length > 0,
+    predictionComplete: u.predictions.some((p) => p.status === "COMPLETE" || p.status === "GROUP_COMPLETE"),
+    joinedLeague: u.predictions.some((p) => p._count.leagueMemberships > 0),
+    createdLeague: u.createdLeagues.length > 0,
+  }))
+
   return (
     <AdminPanels
       matches={matches}
@@ -168,6 +197,7 @@ export default async function AdminPage() {
       tournamentDates={tournamentDates}
       groups={groups}
       cronActivity={cronActivity}
+      users={users}
     />
   )
 }

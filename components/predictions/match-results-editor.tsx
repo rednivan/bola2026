@@ -37,6 +37,8 @@ function MatchRow({
   const active = "bg-[#E61D25] border-[#E61D25] text-white shadow-md shadow-[#E61D25]/20"
   const idleCls = "bg-[#131D42] border-[#1E2B6E] text-[#D1D4D1] hover:border-[#2A398D] hover:text-white"
   const dis = "cursor-not-allowed opacity-50"
+  const [showHome, setShowHome] = useState(false)
+  const [showAway, setShowAway] = useState(false)
 
   function pick(c: ResultChoice) {
     if (locked) return
@@ -46,11 +48,17 @@ function MatchRow({
   return (
     <div className={`grid grid-cols-[1fr_auto_1fr] gap-2 items-center py-2.5 border-b border-[#1E2B6E]/40 last:border-0 ${isJoker ? "bg-amber-950/20 -mx-4 px-4 rounded-lg" : ""}`}>
       {/* Home */}
-      <div className="flex items-center gap-2 min-w-0">
+      <div
+        className="flex items-center gap-2 min-w-0 cursor-pointer select-none"
+        title={match.homeTeam?.name}
+        onClick={() => setShowHome((v) => !v)}
+      >
         {match.homeTeam?.flagUrl && (
           <img src={match.homeTeam.flagUrl} alt={match.homeTeam.code} className="w-6 h-4 object-cover rounded-sm shrink-0" />
         )}
-        <span className="text-white text-sm font-medium truncate">{match.homeTeam?.code ?? "TBD"}</span>
+        <span className="text-white text-sm font-medium truncate hover:text-[#D1D4D1]/80 transition-colors">
+          {showHome ? (match.homeTeam?.name ?? "TBD") : (match.homeTeam?.code ?? "TBD")}
+        </span>
       </div>
 
       {/* Buttons */}
@@ -81,8 +89,14 @@ function MatchRow({
       </div>
 
       {/* Away */}
-      <div className="flex items-center gap-2 min-w-0 justify-end">
-        <span className="text-white text-sm font-medium truncate">{match.awayTeam?.code ?? "TBD"}</span>
+      <div
+        className="flex items-center gap-2 min-w-0 justify-end cursor-pointer select-none"
+        title={match.awayTeam?.name}
+        onClick={() => setShowAway((v) => !v)}
+      >
+        <span className="text-white text-sm font-medium truncate hover:text-[#D1D4D1]/80 transition-colors">
+          {showAway ? (match.awayTeam?.name ?? "TBD") : (match.awayTeam?.code ?? "TBD")}
+        </span>
         {match.awayTeam?.flagUrl && (
           <img src={match.awayTeam.flagUrl} alt={match.awayTeam.code} className="w-6 h-4 object-cover rounded-sm shrink-0" />
         )}

@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 import {
   RefreshCw, Users, Calendar, Zap, CheckCircle2, XCircle,
   PenLine, BarChart2, Mail, Send, Bell, CalendarDays, List, Star,
-  Activity, AlertTriangle, Clock,
+  Activity, AlertTriangle, Clock, Minus,
 } from "lucide-react"
 import { HowToGuide } from "@/components/how-to-guide"
 
@@ -896,6 +896,98 @@ function GroupStandingsPanel({ groups }: { groups: GroupData[] }) {
   )
 }
 
+// ─── Users panel ─────────────────────────────────────────────────────────────
+
+export type UserRow = {
+  id: string
+  displayName: string
+  email: string
+  role: string
+  createdAt: Date
+  hasPrediction: boolean
+  predictionComplete: boolean
+  joinedLeague: boolean
+  createdLeague: boolean
+}
+
+function Tick({ yes }: { yes: boolean }) {
+  return yes
+    ? <CheckCircle2 className="w-4 h-4 text-[#3CAC3B] mx-auto" />
+    : <Minus className="w-4 h-4 text-[#474A4A] mx-auto" />
+}
+
+function UsersPanel({ users }: { users: UserRow[] }) {
+  const withPrediction = users.filter((u) => u.hasPrediction).length
+  const completed      = users.filter((u) => u.predictionComplete).length
+  const inLeague       = users.filter((u) => u.joinedLeague).length
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-white font-semibold text-lg flex items-center gap-2">
+        <Users className="w-4 h-4 text-[#2A398D]" />
+        All Users
+      </h2>
+
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Registered",   value: users.length },
+          { label: "Started",      value: withPrediction },
+          { label: "Completed",    value: completed },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-[#0D1333] border border-[#1E2B6E] rounded-lg p-3 text-center">
+            <p className="text-white font-bold text-xl tabular-nums">{value}</p>
+            <p className="text-[#D1D4D1]/60 text-xs mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: "In a league",    value: inLeague },
+          { label: "Created league", value: users.filter((u) => u.createdLeague).length },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-[#0D1333] border border-[#1E2B6E] rounded-lg p-3 text-center">
+            <p className="text-white font-bold text-xl tabular-nums">{value}</p>
+            <p className="text-[#D1D4D1]/60 text-xs mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Table */}
+      <Card className="bg-[#0D1333] border-[#1E2B6E]">
+        <CardContent className="p-0 overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead>
+              <tr className="border-b border-[#1E2B6E]">
+                {["Name", "Email", "Prediction", "Completed", "In League", "Created League"].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-[#D1D4D1]/60 text-xs font-medium first:rounded-tl-xl last:rounded-tr-xl">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u, i) => (
+                <tr key={u.id} className={`border-b border-[#1E2B6E]/50 last:border-0 ${i % 2 === 0 ? "" : "bg-[#131D42]/30"}`}>
+                  <td className="px-4 py-2.5 text-white font-medium whitespace-nowrap">{u.displayName}</td>
+                  <td className="px-4 py-2.5 text-[#D1D4D1]/70 whitespace-nowrap">{u.email}</td>
+                  <td className="px-4 py-2.5 text-center"><Tick yes={u.hasPrediction} /></td>
+                  <td className="px-4 py-2.5 text-center"><Tick yes={u.predictionComplete} /></td>
+                  <td className="px-4 py-2.5 text-center"><Tick yes={u.joinedLeague} /></td>
+                  <td className="px-4 py-2.5 text-center"><Tick yes={u.createdLeague} /></td>
+                </tr>
+              ))}
+              {users.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-[#474A4A] text-sm">No users yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+    </section>
+  )
+}
+
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export function AdminPanels({
@@ -905,6 +997,7 @@ export function AdminPanels({
   tournamentDates,
   groups,
   cronActivity,
+  users,
 }: {
   matches: MatchRow[]
   matchdays: MatchdayStatus[]
@@ -912,6 +1005,7 @@ export function AdminPanels({
   tournamentDates: TournamentDates | null
   groups: GroupData[]
   cronActivity: CronActivity
+  users: UserRow[]
 }) {
   return (
     <div className="p-8 max-w-2xl space-y-10">
@@ -925,6 +1019,7 @@ export function AdminPanels({
 
       <CronActivityPanel activity={cronActivity} />
 
+      <UsersPanel users={users} />
       <SyncPanel />
       <TournamentDatesPanel dates={tournamentDates} />
       <ScoreEditorPanel matches={matches} />
