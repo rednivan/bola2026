@@ -906,7 +906,7 @@ export type UserRow = {
   createdAt: Date
   hasPrediction: boolean
   predictionComplete: boolean
-  joinedLeague: boolean
+  leagues: string[]
   createdLeague: boolean
 }
 
@@ -919,7 +919,7 @@ function Tick({ yes }: { yes: boolean }) {
 function UsersPanel({ users }: { users: UserRow[] }) {
   const withPrediction = users.filter((u) => u.hasPrediction).length
   const completed      = users.filter((u) => u.predictionComplete).length
-  const inLeague       = users.filter((u) => u.joinedLeague).length
+  const inLeague       = users.filter((u) => u.leagues.length > 0).length
 
   return (
     <section className="space-y-4">
@@ -959,7 +959,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
           <table className="w-full text-sm min-w-[560px]">
             <thead>
               <tr className="border-b border-[#1E2B6E]">
-                {["Name", "Email", "Prediction", "Completed", "In League", "Created League"].map((h) => (
+                {["Name", "Email", "Prediction", "Completed", "Leagues", "Created League"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[#D1D4D1]/60 text-xs font-medium first:rounded-tl-xl last:rounded-tr-xl">
                     {h}
                   </th>
@@ -973,7 +973,16 @@ function UsersPanel({ users }: { users: UserRow[] }) {
                   <td className="px-4 py-2.5 text-[#D1D4D1]/70 whitespace-nowrap">{u.email}</td>
                   <td className="px-4 py-2.5 text-center"><Tick yes={u.hasPrediction} /></td>
                   <td className="px-4 py-2.5 text-center"><Tick yes={u.predictionComplete} /></td>
-                  <td className="px-4 py-2.5 text-center"><Tick yes={u.joinedLeague} /></td>
+                  <td className="px-4 py-2.5">
+                    {u.leagues.length > 0
+                      ? <div className="flex flex-wrap gap-1">
+                          {u.leagues.map((name) => (
+                            <span key={name} className="inline-block px-2 py-0.5 rounded-full bg-[#2A398D]/40 border border-[#2A398D]/60 text-[#D1D4D1] text-xs whitespace-nowrap">{name}</span>
+                          ))}
+                        </div>
+                      : <Minus className="w-4 h-4 text-[#474A4A] mx-auto" />
+                    }
+                  </td>
                   <td className="px-4 py-2.5 text-center"><Tick yes={u.createdLeague} /></td>
                 </tr>
               ))}

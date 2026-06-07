@@ -87,7 +87,10 @@ export default async function AdminPage() {
             id: true, displayName: true, email: true, role: true, createdAt: true,
             predictions: {
               where: { tournamentId: tournament.id },
-              select: { id: true, status: true, _count: { select: { leagueMemberships: true } } },
+              select: {
+                id: true, status: true,
+                leagueMemberships: { select: { league: { select: { name: true } } } },
+              },
             },
             createdLeagues: {
               where: { tournamentId: tournament.id },
@@ -185,7 +188,7 @@ export default async function AdminPage() {
     createdAt: u.createdAt,
     hasPrediction: u.predictions.length > 0,
     predictionComplete: u.predictions.some((p) => p.status === "COMPLETE" || p.status === "GROUP_COMPLETE"),
-    joinedLeague: u.predictions.some((p) => p._count.leagueMemberships > 0),
+    leagues: [...new Set(u.predictions.flatMap((p) => p.leagueMemberships.map((m) => m.league.name)))],
     createdLeague: u.createdLeagues.length > 0,
   }))
 
