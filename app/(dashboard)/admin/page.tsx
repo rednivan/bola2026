@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { getCachedTournamentCounts } from "@/lib/cache"
 import { AdminPanels, type MatchRow, type MatchdayStatus, type KOReminderStatus, type TournamentDates, type GroupData, type CronActivity, type UserRow } from "./admin-panels"
 
 export default async function AdminPage() {
@@ -90,6 +91,7 @@ export default async function AdminPage() {
               select: {
                 id: true, status: true,
                 leagueMemberships: { select: { league: { select: { name: true } } } },
+                _count: { select: { matchPredictions: true, standingPredictions: true, thirdPlacePredictions: true } },
               },
             },
             createdLeagues: {
@@ -147,6 +149,9 @@ export default async function AdminPage() {
     ? await prisma.user.count({ where: { predictions: { some: { tournamentId: tournament.id } } } })
     : 0
 
+  const tournamentCounts = tournament ? await getCachedTournamentCounts(tournament.id) : null
+  const groupOnlyTotal = tournamentCounts ? tournamentCounts.matchTotal + tournamentCounts.standingsTotal + 8 : 0
+
   const koReminderStatus: KOReminderStatus = {
     sentCount: koReminderLogs,
     totalUsers: totalUsersWithPredictions,
@@ -187,7 +192,11 @@ export default async function AdminPage() {
     role: u.role,
     createdAt: u.createdAt,
     hasPrediction: u.predictions.length > 0,
-    predictionComplete: u.predictions.some((p) => p.status === "COMPLETE" || p.status === "GROUP_COMPLETE"),
+    predictionComplete: u.predictions.some((p) => {
+      if (p.status === "COMPLETE" || p.status === "GROUP_COMPLETE") return true
+      const saved = p._count.matchPredictions + p._count.standingPredictions + p._count.thirdPlacePredictions
+      return groupOnlyTotal > 0 && saved >= groupOnlyTotal
+    }),
     leagues: [...new Set(u.predictions.flatMap((p) => p.leagueMemberships.map((m) => m.league.name)))],
     createdLeague: u.createdLeagues.length > 0,
   }))
