@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { sendMatchdayEmail } from "@/lib/emails/daily-results"
+import { sendMatchdayEmail, matchdayDateString } from "@/lib/emails/daily-results"
 
 const JOB = "send-matchday-emails"
 
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
     const byDate = new Map<string, { total: number; completed: number }>()
     for (const m of allMatches) {
-      const date = m.kickoff.toISOString().slice(0, 10)
+      const date = matchdayDateString(m.kickoff)
       const entry = byDate.get(date) ?? { total: 0, completed: 0 }
       entry.total++
       if (m.homeScore !== null) entry.completed++

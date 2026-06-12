@@ -2,6 +2,15 @@ import { transporter, FROM } from "@/lib/mailer"
 import { prisma } from "@/lib/prisma"
 import { unsubscribeUrl } from "./unsubscribe"
 
+// World Cup 2026 runs entirely within US Eastern Daylight Time (UTC-4, DST until
+// early November) — "matchday" boundaries use the Eastern calendar date instead
+// of UTC, so late-evening US kickoffs group with same-day matches.
+const US_TZ_OFFSET_MS = 4 * 60 * 60 * 1000
+
+export function matchdayDateString(kickoff: Date): string {
+  return new Date(kickoff.getTime() - US_TZ_OFFSET_MS).toISOString().slice(0, 10)
+}
+
 // ─── HTML helpers ────────────────────────────────────────────────────────────
 
 function matchRow(
@@ -201,9 +210,9 @@ export async function sendMatchdayEmail(
 ) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bola.wathan.my"
 
-  // Matches on this matchday
-  const dayStart = new Date(matchday + "T00:00:00Z")
-  const dayEnd   = new Date(matchday + "T23:59:59Z")
+  // Matches on this matchday (Eastern calendar date, see matchdayDateString)
+  const dayStart = new Date(`${matchday}T00:00:00-04:00`)
+  const dayEnd   = new Date(`${matchday}T23:59:59-04:00`)
 
   const [todayMatches, upcomingRaw, userPredictions] = await Promise.all([
     prisma.match.findMany({
