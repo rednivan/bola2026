@@ -2,7 +2,8 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import { getCachedTournament, getCachedUser, getCachedUpcomingMatches, getCachedRecentMatches } from "@/lib/cache"
-import { formatDistanceToNow, format, isPast } from "date-fns"
+import { formatDistanceToNow, isPast } from "date-fns"
+import { LocalDate } from "@/components/local-date"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -220,7 +221,7 @@ export default async function DashboardPage() {
                         <span className="truncate">{match.awayTeam?.code ?? "TBD"}</span>
                       </div>
                       <p className="text-[#D1D4D1]/50 text-xs mt-0.5">
-                        {format(match.kickoff, "d MMM · HH:mm")}
+                        <LocalDate date={match.kickoff} fmt="d MMM · HH:mm" />
                         {match.group && ` · Group ${match.group.letter}`}
                       </p>
                     </div>
@@ -265,7 +266,7 @@ export default async function DashboardPage() {
                         </span>
                       </div>
                       <p className="text-[#D1D4D1]/50 text-xs mt-0.5">
-                        {format(match.kickoff, "d MMM")}
+                        <LocalDate date={match.kickoff} fmt="d MMM" />
                         {match.group && ` · Group ${match.group.letter}`}
                       </p>
                     </div>

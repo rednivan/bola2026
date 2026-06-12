@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { format } from "date-fns"
 import { Save, CheckCircle2, AlertCircle, Trophy, Shield, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { LocalDate } from "@/components/local-date"
 import { saveKOPredictions, saveJokerPick } from "@/lib/actions/predictions"
 import type { Team } from "./prediction-editor"
 
@@ -92,7 +92,7 @@ function KOMatchCard({ match, pick, resolvedHome, resolvedAway, onPick, locked }
         <span className="text-[#474A4A] text-xs font-mono">#{match.matchNumber}</span>
         <div className="flex items-center gap-2">
           <span className="text-[#3CAC3B] text-xs font-semibold">+{match.pointsAvailable}pts</span>
-          <span className="text-[#474A4A] text-xs">{format(match.kickoff, "d MMM")}</span>
+          <span className="text-[#474A4A] text-xs"><LocalDate date={match.kickoff} fmt="d MMM" /></span>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 "use client"
 
-import { format } from "date-fns"
 import { CheckCircle2, XCircle, Clock, Trophy, Star } from "lucide-react"
+import { LocalDate } from "@/components/local-date"
 import type { KOMatch } from "./ko-bracket-editor"
 import type { Team } from "./prediction-editor"
 
@@ -141,7 +141,7 @@ export function KOResultsView({ koMatches, savedKOPicksMap, jokerMatchIds = {}, 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-[#474A4A] text-xs font-mono">#{match.matchNumber}</span>
-                        <span className="text-[#474A4A] text-xs">{format(match.kickoff, "d MMM")}</span>
+                        <span className="text-[#474A4A] text-xs"><LocalDate date={match.kickoff} fmt="d MMM" /></span>
                         {isJoker && (
                           <span className="flex items-center gap-1 text-[10px] bg-amber-700/40 text-amber-300 border border-amber-600/40 rounded px-1.5 py-0.5 font-medium">
                             <Star className="w-2.5 h-2.5 fill-amber-400" /> JOKER ×2

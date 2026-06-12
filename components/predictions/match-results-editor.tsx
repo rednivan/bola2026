@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { format } from "date-fns"
 import { Save, CheckCircle2, AlertCircle, Loader2, Star, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { LocalDate } from "@/components/local-date"
 import { saveMatchPredictions, saveJokerPick, getJulesPredictions, type MatchPredictionData } from "@/lib/actions/predictions"
 import type { GroupMatch, ResultChoice } from "./prediction-editor"
 
@@ -84,7 +84,7 @@ function MatchRow({
           </button>
         </div>
         <span className="text-[#474A4A] text-xs">
-          {format(match.kickoff, "d MMM")}
+          <LocalDate date={match.kickoff} fmt="d MMM" />
         </span>
       </div>
 
