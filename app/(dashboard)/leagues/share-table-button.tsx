@@ -7,8 +7,9 @@ import { Share2, Loader2 } from "lucide-react"
 type Props = { targetId: string; fileName: string }
 
 // Nodes marked data-share-ignore (e.g. this button itself) are excluded from the captured image.
+// html-to-image calls this on every node in the tree, including text nodes, which have no dataset.
 function captureFilter(node: HTMLElement) {
-  return !("shareIgnore" in node.dataset)
+  return !node.dataset || !("shareIgnore" in node.dataset)
 }
 
 export function ShareTableButton({ targetId, fileName }: Props) {
@@ -35,7 +36,10 @@ export function ShareTableButton({ targetId, fileName }: Props) {
         link.click()
       }
     } catch (e) {
-      if ((e as Error).name !== "AbortError") setError("Couldn't generate image — try again")
+      if ((e as Error).name !== "AbortError") {
+        console.error("Failed to generate share image:", e)
+        setError("Couldn't generate image — try again")
+      }
     } finally {
       setBusy(false)
     }
