@@ -41,6 +41,13 @@ async function getLeaguesData(userId: string) {
     getCachedTournamentCounts(tournament.id),
   ])
 
+  // Show leagues where the user is ranked highest first; unranked (0) leagues last
+  memberships.sort((a, b) => {
+    const rankA = a.currentRank > 0 ? a.currentRank : Infinity
+    const rankB = b.currentRank > 0 ? b.currentRank : Infinity
+    return rankA - rankB
+  })
+
   const groupOnlyTotal = counts.matchTotal + counts.standingsTotal + 8
   const completedPredictions = predictions.filter((p) => {
     if (p.status === "COMPLETE" || p.status === "GROUP_COMPLETE") return true
