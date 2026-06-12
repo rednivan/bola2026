@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import { syncTeamsFromApi, syncMatchesFromApi } from "@/lib/sync"
 
+// Match/team upserts run sequentially (see lib/sync.ts batch()) to avoid
+// connection pool contention, so this needs more headroom than the default.
+export const maxDuration = 60
+
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

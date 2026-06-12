@@ -5,6 +5,10 @@ import { recalculateAllScores } from "@/lib/scoring"
 
 const JOB = "sync-and-score"
 
+// Match/team upserts now run sequentially (see lib/sync.ts batch()) to avoid
+// connection pool contention, so this needs more headroom than the default.
+export const maxDuration = 60
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {

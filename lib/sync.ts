@@ -32,8 +32,10 @@ const STAGE_POINTS: Record<Stage, number> = {
   GROUP: 1, R32: 3, R16: 6, QF: 12, SF: 25, THIRD_PLACE: 10, FINAL: 60,
 }
 
-// Run promise-returning functions in parallel chunks to stay pool-friendly
-async function batch<T>(fns: (() => Promise<T>)[], size = 8): Promise<T[]> {
+// Run promise-returning functions sequentially. The production DB connection
+// is capped at connection_limit=1, so any concurrency here just queues up
+// behind that single connection and eventually trips the 10s pool timeout.
+async function batch<T>(fns: (() => Promise<T>)[], size = 1): Promise<T[]> {
   const out: T[] = []
   for (let i = 0; i < fns.length; i += size) {
     out.push(...await Promise.all(fns.slice(i, i + size).map((f) => f())))
