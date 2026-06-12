@@ -225,6 +225,7 @@ export async function sendMatchdayEmail(
         tournamentId,
         kickoff: { gt: dayEnd },
         homeTeamId: { not: null },
+        homeScore: null,
       },
       include: {
         homeTeam: { select: { name: true } },
