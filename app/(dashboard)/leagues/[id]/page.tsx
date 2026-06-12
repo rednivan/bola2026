@@ -1,11 +1,12 @@
 import { redirect, notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Trophy, Users, ArrowLeft, Hash, Crown, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { ShareInviteButton } from "../share-invite-button"
+import { ShareTableButton } from "../share-table-button"
 
 export default async function LeagueStandingsPage({
   params,
@@ -91,7 +92,7 @@ export default async function LeagueStandingsPage({
         </div>
       )}
 
-      <Card className="bg-[#0D1333] border-[#1E2B6E]">
+      <Card className="bg-[#0D1333] border-[#1E2B6E]" id="standings-table">
         <CardHeader className="pb-3">
           <CardTitle className="text-white flex items-center gap-2">
             <Trophy className="w-4 h-4 text-yellow-400" />
@@ -102,6 +103,9 @@ export default async function LeagueStandingsPage({
               ? "Tap a member to see their predictions (read only)."
               : "Member predictions become viewable once the group stage starts."}
           </p>
+          <CardAction>
+            <ShareTableButton targetId="standings-table" fileName={`${league.name}-standings`} />
+          </CardAction>
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y divide-[#1E2B6E]">
