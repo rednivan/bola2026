@@ -34,7 +34,9 @@ export async function proxy(request: NextRequest) {
 
   // Redirect unauthenticated users away from protected routes
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/register") || pathname.startsWith("/forgot-password") || pathname.startsWith("/reset-password")
-  const isProtected = !isAuthRoute && !pathname.startsWith("/auth")
+  // Cron jobs (CRON_SECRET bearer check) and unsubscribe links (HMAC token check) authenticate themselves
+  const isSelfAuthenticatedRoute = pathname.startsWith("/api/cron") || pathname.startsWith("/api/email/unsubscribe")
+  const isProtected = !isAuthRoute && !isSelfAuthenticatedRoute && !pathname.startsWith("/auth")
 
   if (!user && isProtected && pathname !== "/") {
     const url = request.nextUrl.clone()
