@@ -184,6 +184,9 @@ model Prediction {
   groupLocked Boolean @default(false)
   // Set true when KO stage starts — all predictions frozen
   koLocked    Boolean @default(false)
+  // Temporary admin-granted exception: while in the future, group predictions
+  // are editable for this prediction regardless of groupLocked/groupStageStart
+  groupUnlockUntil DateTime?
 
   totalScore    Int   @default(0)
   matchAccuracy Float @default(0)

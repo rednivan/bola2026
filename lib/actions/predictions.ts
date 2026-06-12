@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import { type Stage } from "@/lib/generated/prisma"
 import { isPast } from "date-fns"
+import { isGroupLocked } from "@/lib/locks"
 
 async function getAuthUserId(): Promise<string> {
   const supabase = await createClient()
@@ -91,7 +92,7 @@ export async function saveGroupStandings(
   try {
     const userId = await getAuthUserId()
     const prediction = await getPrediction(predictionId, userId)
-    if (prediction.groupLocked || new Date() >= prediction.tournament.groupStageStart) {
+    if (isGroupLocked(prediction, prediction.tournament)) {
       return { ok: false, message: "Group predictions are locked" }
     }
 
@@ -118,7 +119,7 @@ export async function saveThirdPlacePicks(
   try {
     const userId = await getAuthUserId()
     const prediction = await getPrediction(predictionId, userId)
-    if (prediction.groupLocked || new Date() >= prediction.tournament.groupStageStart) {
+    if (isGroupLocked(prediction, prediction.tournament)) {
       return { ok: false, message: "Group predictions are locked" }
     }
     if (groupIds.length !== 8) return { ok: false, message: "Select exactly 8 groups" }
@@ -150,7 +151,7 @@ export async function saveMatchPredictions(
   try {
     const userId = await getAuthUserId()
     const prediction = await getPrediction(predictionId, userId)
-    if (prediction.groupLocked || new Date() >= prediction.tournament.groupStageStart) {
+    if (isGroupLocked(prediction, prediction.tournament)) {
       return { ok: false, message: "Group predictions are locked" }
     }
 
@@ -239,7 +240,7 @@ export async function saveJokerPick(
         return { ok: false, message: "KO predictions are locked." }
       }
     } else {
-      if (prediction.groupLocked || new Date() >= prediction.tournament.groupStageStart) {
+      if (isGroupLocked(prediction, prediction.tournament)) {
         return { ok: false, message: "Group predictions are locked." }
       }
     }

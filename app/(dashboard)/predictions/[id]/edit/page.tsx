@@ -9,6 +9,7 @@ import { RenamePrediction } from "./rename-prediction"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Trophy, Lock, Clock } from "lucide-react"
+import { isGroupLocked } from "@/lib/locks"
 
 async function getPredictionData(predictionId: string) {
   // Static tournament data served from Next.js cache — no DB hit on warm loads
@@ -112,12 +113,12 @@ export default async function EditPredictionPage({
 
   const now = new Date()
   const { tournament } = prediction
-  const isGroupLocked = prediction.groupLocked || now >= tournament.groupStageStart
+  const groupLocked = isGroupLocked(prediction, tournament)
   const groupStageEnded = now >= tournament.groupStageEnd
   const koStageStarted = now >= tournament.knockoutStageStart
   // KO bracket is only editable in Window 2: after group stage ends, before KO stage starts
   const isKOLocked = prediction.koLocked || !groupStageEnded || koStageStarted
-  const isWindow2 = isGroupLocked && !isKOLocked && groupStageEnded
+  const isWindow2 = groupLocked && !isKOLocked && groupStageEnded
 
   // Build actual group standings for KO bracket (available once admin sets positions post-group stage)
   const actualGroupOrdersMap: Record<string, { id: string; name: string; code: string; flagUrl: string }[]> = {}
@@ -153,7 +154,7 @@ export default async function EditPredictionPage({
         <div className="flex items-center gap-2 flex-wrap">
           <HowToGuide variant="predictions" />
           <DeletePredictionButton predictionId={id} />
-          {isGroupLocked && !isWindow2 && (
+          {groupLocked && !isWindow2 && (
             <div className="flex items-center gap-2 bg-[#131D42] border border-[#1E2B6E] rounded-lg px-3 py-2">
               <Lock className="w-4 h-4 text-[#474A4A]" />
               <span className="text-[#D1D4D1]/60 text-sm">Group stage locked</span>
@@ -186,7 +187,7 @@ export default async function EditPredictionPage({
         savedThirdPlaceGroupIds={thirdPlacePicks.map((t) => t.groupId)}
         standingsTotal={groups.length * 4}
         matchTotal={groupMatches.length}
-        locked={isGroupLocked}
+        locked={groupLocked}
         koMatches={koMatches}
         savedKOPicksMap={savedKOPicksMap}
         koLocked={isKOLocked}
