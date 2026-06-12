@@ -96,7 +96,10 @@ export async function syncMatchesFromApi(): Promise<string> {
     let homeScore: number | null = null
     let awayScore: number | null = null
 
-    if (m.score?.fullTime) {
+    // football-data.org populates score.fullTime with the live score while a match
+    // is still IN_PLAY/PAUSED — only treat the result as final once the match has ended.
+    const isFinal = m.status === "FINISHED" || m.status === "AWARDED"
+    if (isFinal && m.score?.fullTime) {
       homeScore = m.score.fullTime.home
       awayScore = m.score.fullTime.away
       if (homeScore !== null && awayScore !== null) {
