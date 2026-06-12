@@ -27,7 +27,12 @@ export default async function LeagueStandingsPage({
       tournament: { select: { name: true, year: true, groupStageStart: true } },
       memberships: {
         include: {
-          prediction: { select: { id: true, name: true, totalScore: true, userId: true } },
+          prediction: {
+            select: {
+              id: true, name: true, totalScore: true, userId: true,
+              user: { select: { displayName: true } },
+            },
+          },
         },
         orderBy: { currentRank: "asc" },
       },
@@ -138,9 +143,14 @@ export default async function LeagueStandingsPage({
                   {/* Name + score bar */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-sm font-medium truncate ${isMe ? "text-[#3CAC3B]" : "text-white"}`}>
-                        {m.prediction.name}
-                      </span>
+                      <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
+                        <span className={`text-sm font-medium truncate ${isMe ? "text-[#3CAC3B]" : "text-white"}`}>
+                          {m.prediction.name}
+                        </span>
+                        <span className="text-[#474A4A] text-xs shrink-0">
+                          {m.prediction.user.displayName}
+                        </span>
+                      </div>
                       {isMe && (
                         <span className="text-[#3CAC3B] text-xs shrink-0">★ you</span>
                       )}
