@@ -34,7 +34,9 @@ export default async function LeagueStandingsPage({
             },
           },
         },
-        orderBy: { currentRank: "asc" },
+        // Order by points rather than the cached currentRank — newly joined
+        // members default to currentRank 0, which would otherwise sort first.
+        orderBy: { prediction: { totalScore: "desc" } },
       },
     },
   })
