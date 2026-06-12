@@ -53,7 +53,7 @@ type Props = {
 
 // ─── Group-stage helpers ───────────────────────────────────────────────────
 
-function initGroupOrders(
+export function initGroupOrders(
   groups: GroupData[],
   savedStandings: Record<string, Record<string, number>>
 ): Record<string, Team[]> {
@@ -69,7 +69,7 @@ function initGroupOrders(
   return init
 }
 
-function initPicks(
+export function initPicks(
   matchesByGroup: Props["matchesByGroup"],
   savedPicksMap: Props["savedPicksMap"],
   groups: GroupData[]
@@ -110,7 +110,7 @@ function recalcGroupOrder(
 // Pre-tournament, KO matches have null DB teams, so we match predictedWinnerId
 // against the bracket-derived teams (from group predictions) instead.
 // Each stage's picks feed the cascade so the next stage can be resolved too.
-function initKOPicksIterative(
+export function initKOPicksIterative(
   koMatches: KOMatch[],
   savedMap: Props["savedKOPicksMap"],
   groups: GroupData[],
@@ -151,7 +151,7 @@ const GROUP_PAIRS: [string, string][] = [
   ["G", "H"], ["I", "J"], ["K", "L"],
 ]
 
-function computeKOBracket(
+export function computeKOBracket(
   koMatches: KOMatch[],
   groups: GroupData[],
   groupOrders: Record<string, Team[]>,

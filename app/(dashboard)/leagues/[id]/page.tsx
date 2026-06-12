@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trophy, Users, ArrowLeft, Hash, Crown } from "lucide-react"
+import { Trophy, Users, ArrowLeft, Hash, Crown, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { ShareInviteButton } from "../share-invite-button"
 
@@ -23,7 +23,7 @@ export default async function LeagueStandingsPage({
     where: { id },
     include: {
       creator: { select: { id: true, displayName: true } },
-      tournament: { select: { name: true, year: true } },
+      tournament: { select: { name: true, year: true, groupStageStart: true } },
       memberships: {
         include: {
           prediction: { select: { id: true, name: true, totalScore: true, userId: true } },
@@ -40,6 +40,9 @@ export default async function LeagueStandingsPage({
   if (!isMember) notFound()
 
   const isCreator = league.creatorId === user.id
+
+  // Members' predictions become viewable (read only) once the group stage is frozen
+  const groupStageFrozen = new Date() >= league.tournament.groupStageStart
 
   // Find highest score for % bar scaling
   const maxScore = Math.max(...league.memberships.map((m) => m.prediction.totalScore), 1)
@@ -94,6 +97,11 @@ export default async function LeagueStandingsPage({
             <Trophy className="w-4 h-4 text-yellow-400" />
             Standings
           </CardTitle>
+          <p className="text-[#D1D4D1]/60 text-xs mt-0.5">
+            {groupStageFrozen
+              ? "Tap a member to see their predictions (read only)."
+              : "Member predictions become viewable once the group stage starts."}
+          </p>
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y divide-[#1E2B6E]">
@@ -102,11 +110,12 @@ export default async function LeagueStandingsPage({
               const rank = m.currentRank > 0 ? m.currentRank : idx + 1
               const scorePercent = maxScore > 0 ? (m.prediction.totalScore / maxScore) * 100 : 0
 
-              return (
-                <div
-                  key={m.id}
-                  className={`flex items-center gap-4 px-4 py-3.5 ${isMe ? "bg-[#1A2560]/50" : ""}`}
-                >
+              const rowClassName = `flex items-center gap-4 px-4 py-3.5 ${isMe ? "bg-[#1A2560]/50" : ""} ${
+                groupStageFrozen ? "hover:bg-[#1A2560]/80 transition-colors" : ""
+              }`
+
+              const rowContent = (
+                <>
                   {/* Rank */}
                   <div className="w-8 shrink-0 text-center">
                     {rank === 1 ? (
@@ -147,6 +156,20 @@ export default async function LeagueStandingsPage({
                     </span>
                     <span className="text-[#474A4A] text-xs ml-1">pts</span>
                   </div>
+
+                  {groupStageFrozen && (
+                    <ChevronRight className="w-4 h-4 text-[#474A4A] shrink-0" />
+                  )}
+                </>
+              )
+
+              return groupStageFrozen ? (
+                <Link key={m.id} href={`/leagues/${id}/${m.prediction.id}`} className={rowClassName}>
+                  {rowContent}
+                </Link>
+              ) : (
+                <div key={m.id} className={rowClassName}>
+                  {rowContent}
                 </div>
               )
             })}
