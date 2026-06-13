@@ -15,7 +15,7 @@ import { HowToGuide } from "@/components/how-to-guide"
 async function getDashboardData(userId: string) {
   // Phase 1: tournament ID from cache (~0 ms) — needed to avoid JOIN filters below
   const tournament = await getCachedTournament()
-  if (!tournament) return { tournament: null, predictions: [], leagues: [], upcomingMatches: [], recentMatches: [] }
+  if (!tournament) return { tournament: null, predictions: [], leagues: [], upcomingMatches: [], recentMatches: [], pointsByMatch: {} as Record<string, number> }
 
   // Phase 2: user-specific queries use tournamentId directly (no JOIN);
   // match queries are served from cache
@@ -37,7 +37,18 @@ async function getDashboardData(userId: string) {
     getCachedRecentMatches(tournament.id),
   ])
 
-  return { tournament, predictions, leagues, upcomingMatches, recentMatches }
+  // Points the user scored on each recent result, summed across their prediction(s)
+  let pointsByMatch: Record<string, number> = {}
+  if (predictions.length > 0 && recentMatches.length > 0) {
+    const matchPoints = await prisma.matchPrediction.groupBy({
+      by: ["matchId"],
+      where: { prediction: { userId, tournamentId: tournament.id }, matchId: { in: recentMatches.map((m) => m.id) } },
+      _sum: { pointsEarned: true },
+    })
+    pointsByMatch = Object.fromEntries(matchPoints.map((m) => [m.matchId, m._sum.pointsEarned ?? 0]))
+  }
+
+  return { tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch }
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -57,7 +68,7 @@ export default async function DashboardPage() {
   ])
   if (!dbUser) redirect("/login")
 
-  const { tournament, predictions, leagues, upcomingMatches, recentMatches } = data
+  const { tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch } = data
 
   const now = new Date()
   const tournamentStarted = tournament ? isPast(tournament.groupStageStart) : false
@@ -251,30 +262,40 @@ export default async function DashboardPage() {
               <p className="text-[#474A4A] text-sm py-4 text-center">No results yet</p>
             ) : (
               <div className="space-y-3">
-                {recentMatches.map((match) => (
-                  <div key={match.id} className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 text-sm font-medium text-white">
-                        <span className={match.winnerId === match.homeTeamId ? "text-[#3CAC3B]" : ""}>
-                          {match.homeTeam?.code}
-                        </span>
-                        <span className="text-[#D1D4D1] font-bold shrink-0 tabular-nums">
-                          {match.homeScore} – {match.awayScore}
-                        </span>
-                        <span className={match.winnerId === match.awayTeamId ? "text-[#3CAC3B]" : ""}>
-                          {match.awayTeam?.code}
-                        </span>
+                {recentMatches.map((match) => {
+                  const pts = pointsByMatch[match.id] ?? 0
+                  return (
+                    <div key={match.id} className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-sm font-medium text-white">
+                          <span className={match.winnerId === match.homeTeamId ? "text-[#3CAC3B]" : ""}>
+                            {match.homeTeam?.code}
+                          </span>
+                          <span className="text-[#D1D4D1] font-bold shrink-0 tabular-nums">
+                            {match.homeScore} – {match.awayScore}
+                          </span>
+                          <span className={match.winnerId === match.awayTeamId ? "text-[#3CAC3B]" : ""}>
+                            {match.awayTeam?.code}
+                          </span>
+                        </div>
+                        <p className="text-[#D1D4D1]/50 text-xs mt-0.5">
+                          <LocalDate date={match.kickoff} fmt="d MMM" />
+                          {match.group && ` · Group ${match.group.letter}`}
+                        </p>
                       </div>
-                      <p className="text-[#D1D4D1]/50 text-xs mt-0.5">
-                        <LocalDate date={match.kickoff} fmt="d MMM" />
-                        {match.group && ` · Group ${match.group.letter}`}
-                      </p>
+                      <div className="text-right shrink-0 ml-3">
+                        <Badge variant="outline" className="border-[#1E2B6E] text-[#D1D4D1]/70 text-xs">
+                          {STAGE_LABEL[match.stage]}
+                        </Badge>
+                        {predictions.length > 0 && (
+                          <p className={`text-xs mt-1 tabular-nums ${pts > 0 ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
+                            +{pts} pts
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <Badge variant="outline" className="border-[#1E2B6E] text-[#D1D4D1]/70 text-xs shrink-0 ml-3">
-                      {STAGE_LABEL[match.stage]}
-                    </Badge>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </CardContent>
