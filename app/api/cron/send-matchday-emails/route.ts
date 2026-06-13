@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { sendMatchdayEmail, matchdayDateString } from "@/lib/emails/daily-results"
+import { sendMatchdayEmail, matchdayDateString, getMatchdayContext, type LeagueTableRow } from "@/lib/emails/daily-results"
 
 const JOB = "send-matchday-emails"
+
+export const maxDuration = 60
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
@@ -56,6 +58,7 @@ export async function GET(request: Request) {
 
     let totalSent = 0
     const errors: string[] = []
+    const leagueTableCache = new Map<string, LeagueTableRow[]>()
 
     for (const matchday of completedMatchdays) {
       const alreadySent = await prisma.matchdayEmailLog.findMany({
@@ -69,9 +72,11 @@ export async function GET(request: Request) {
       )
       if (pending.length === 0) continue
 
+      const context = await getMatchdayContext(tournament.id, matchday)
+
       for (const user of pending) {
         try {
-          await sendMatchdayEmail(user.email, user.id, matchday, tournament.id)
+          await sendMatchdayEmail(user.email, user.id, matchday, tournament.id, context, leagueTableCache)
           await prisma.matchdayEmailLog.create({ data: { userId: user.id, matchday } })
           sentTodayIds.add(user.id)
           totalSent++

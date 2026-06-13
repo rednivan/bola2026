@@ -44,6 +44,19 @@ function upcomingRow(
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type RecentResult = {
+  home: string; away: string; homeScore: number; awayScore: number; label: string; kickoff: Date
+}
+
+type UpcomingMatch = {
+  home: string; away: string; label: string; kickoff: Date
+}
+
+export type LeagueTableRow = {
+  currentRank: number
+  prediction: { name: string; totalScore: number }
+}
+
 type LeagueEntry = {
   leagueId: string
   leagueName: string
@@ -58,12 +71,21 @@ type PredictionSummary = {
   leagues: LeagueEntry[]
 }
 
+// Data shared across all users for a given matchday — fetched once per cron
+// run instead of once per user.
+type MatchdayContext = {
+  dayStart: Date
+  dayEnd: Date
+  recentResults: RecentResult[]
+  upcomingMatches: UpcomingMatch[]
+}
+
 // ─── Email builder ───────────────────────────────────────────────────────────
 
 function buildHtml(
   matchdayDate: string,
-  recentResults: { home: string; away: string; homeScore: number; awayScore: number; label: string; kickoff: Date }[],
-  upcomingMatches: { home: string; away: string; label: string; kickoff: Date }[],
+  recentResults: RecentResult[],
+  upcomingMatches: UpcomingMatch[],
   predictions: PredictionSummary[],
   appUrl: string,
   userId: string,
@@ -200,21 +222,15 @@ function buildHtml(
 </html>`
 }
 
-// ─── Data fetcher ─────────────────────────────────────────────────────────────
+// ─── Shared per-matchday data ─────────────────────────────────────────────────
+// Today's results and the upcoming-matches preview are identical for every
+// user on a given matchday, so fetch them once per cron run and reuse.
 
-export async function sendMatchdayEmail(
-  to: string,
-  userId: string,
-  matchday: string,
-  tournamentId: string,
-) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bola.wathan.my"
-
-  // Matches on this matchday (Eastern calendar date, see matchdayDateString)
+export async function getMatchdayContext(tournamentId: string, matchday: string): Promise<MatchdayContext> {
   const dayStart = new Date(`${matchday}T00:00:00-04:00`)
   const dayEnd   = new Date(`${matchday}T23:59:59-04:00`)
 
-  const [todayMatches, upcomingRaw, userPredictions] = await Promise.all([
+  const [todayMatches, upcomingRaw] = await Promise.all([
     prisma.match.findMany({
       where: {
         tournamentId,
@@ -244,47 +260,86 @@ export async function sendMatchdayEmail(
       orderBy: { kickoff: "asc" },
       take: 6,
     }),
-
-    prisma.prediction.findMany({
-      where: { userId, tournamentId },
-      include: {
-        matchPredictions: {
-          where: {
-            match: { kickoff: { gte: dayStart, lte: dayEnd } },
-          },
-          select: { pointsEarned: true },
-        },
-        leagueMemberships: {
-          include: {
-            league: {
-              select: { name: true },
-            },
-            // This membership's own rank is on the record itself
-          },
-        },
-      },
-      orderBy: { name: "asc" },
-    }),
   ])
 
-  // Fetch league tables for all leagues the user is in
+  const recentResults: RecentResult[] = todayMatches.map((m) => ({
+    home: m.homeTeam?.name ?? m.homeTeamPlaceholder ?? "TBD",
+    away: m.awayTeam?.name ?? m.awayTeamPlaceholder ?? "TBD",
+    homeScore: m.homeScore!,
+    awayScore: m.awayScore!,
+    label: m.group ? `Group ${m.group.letter}` : m.stage,
+    kickoff: m.kickoff,
+  }))
+
+  const upcomingMatches: UpcomingMatch[] = upcomingRaw.map((m) => ({
+    home: m.homeTeam?.name ?? m.homeTeamPlaceholder ?? "TBD",
+    away: m.awayTeam?.name ?? m.awayTeamPlaceholder ?? "TBD",
+    label: m.group ? `Group ${m.group.letter}` : m.stage,
+    kickoff: m.kickoff,
+  }))
+
+  return { dayStart, dayEnd, recentResults, upcomingMatches }
+}
+
+// League tables are also identical for every member of a given league, so
+// cache them across users within a single cron run.
+export async function getLeagueTable(leagueId: string, cache: Map<string, LeagueTableRow[]>): Promise<LeagueTableRow[]> {
+  let table = cache.get(leagueId)
+  if (!table) {
+    table = await prisma.leagueMembership.findMany({
+      where: { leagueId },
+      include: { prediction: { select: { name: true, totalScore: true } } },
+      orderBy: { currentRank: "asc" },
+      take: 5,
+    })
+    cache.set(leagueId, table)
+  }
+  return table
+}
+
+// ─── Per-user email ────────────────────────────────────────────────────────────
+
+export async function sendMatchdayEmail(
+  to: string,
+  userId: string,
+  matchday: string,
+  tournamentId: string,
+  context?: MatchdayContext,
+  leagueTableCache?: Map<string, LeagueTableRow[]>,
+) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bola.wathan.my"
+  const ctx = context ?? (await getMatchdayContext(tournamentId, matchday))
+  const cache = leagueTableCache ?? new Map<string, LeagueTableRow[]>()
+
+  const userPredictions = await prisma.prediction.findMany({
+    where: { userId, tournamentId },
+    include: {
+      matchPredictions: {
+        where: {
+          match: { kickoff: { gte: ctx.dayStart, lte: ctx.dayEnd } },
+        },
+        select: { pointsEarned: true },
+      },
+      leagueMemberships: {
+        include: {
+          league: {
+            select: { name: true },
+          },
+          // This membership's own rank is on the record itself
+        },
+      },
+    },
+    orderBy: { name: "asc" },
+  })
+
+  // Fetch (or reuse cached) league tables for all leagues the user is in
   const leagueIds = [
     ...new Set(userPredictions.flatMap((p) => p.leagueMemberships.map((m) => m.leagueId))),
   ]
-
-  const leagueTables = await Promise.all(
-    leagueIds.map((leagueId) =>
-      prisma.leagueMembership.findMany({
-        where: { leagueId },
-        include: {
-          prediction: { select: { name: true, totalScore: true } },
-        },
-        orderBy: { currentRank: "asc" },
-        take: 5,
-      })
-    )
-  )
-  const leagueTableMap = new Map(leagueIds.map((id, i) => [id, leagueTables[i]]))
+  const leagueTableMap = new Map<string, LeagueTableRow[]>()
+  for (const leagueId of leagueIds) {
+    leagueTableMap.set(leagueId, await getLeagueTable(leagueId, cache))
+  }
 
   // Build prediction summaries
   const predictions: PredictionSummary[] = userPredictions.map((p) => {
@@ -307,24 +362,7 @@ export async function sendMatchdayEmail(
     return { name: p.name, totalScore: p.totalScore, pointsToday, leagues }
   })
 
-  // Shape match rows
-  const recentResults = todayMatches.map((m) => ({
-    home: m.homeTeam?.name ?? m.homeTeamPlaceholder ?? "TBD",
-    away: m.awayTeam?.name ?? m.awayTeamPlaceholder ?? "TBD",
-    homeScore: m.homeScore!,
-    awayScore: m.awayScore!,
-    label: m.group ? `Group ${m.group.letter}` : m.stage,
-    kickoff: m.kickoff,
-  }))
-
-  const upcomingMatches = upcomingRaw.map((m) => ({
-    home: m.homeTeam?.name ?? m.homeTeamPlaceholder ?? "TBD",
-    away: m.awayTeam?.name ?? m.awayTeamPlaceholder ?? "TBD",
-    label: m.group ? `Group ${m.group.letter}` : m.stage,
-    kickoff: m.kickoff,
-  }))
-
-  const html = buildHtml(matchday, recentResults, upcomingMatches, predictions, appUrl, userId)
+  const html = buildHtml(matchday, ctx.recentResults, ctx.upcomingMatches, predictions, appUrl, userId)
 
   const dateLabel = new Date(matchday + "T12:00:00Z").toLocaleDateString("en-GB", {
     day: "numeric", month: "short",
