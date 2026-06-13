@@ -146,10 +146,10 @@ export default async function LeagueStandingsPage({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
-                        <span className={`text-sm font-medium truncate ${isMe ? "text-[#3CAC3B]" : "text-white"}`}>
+                        <span className={`text-sm font-medium shrink-0 ${isMe ? "text-[#3CAC3B]" : "text-white"}`}>
                           {m.prediction.name}
                         </span>
-                        <span className="text-[#474A4A] text-xs shrink-0">
+                        <span className="text-[#474A4A] text-xs truncate min-w-0">
                           {m.prediction.user.displayName}
                         </span>
                       </div>
