@@ -91,7 +91,7 @@ function buildHtml(
             <tbody>${rows}</tbody>
           </table>
           <div style="text-align:right;margin-top:6px">
-            <a href="${appUrl}/leagues/${l.leagueId}" style="font-size:12px;color:#2A398D;text-decoration:none">View full table →</a>
+            <a href="${appUrl}/leagues/${l.leagueId}" style="font-size:12px;color:#ffffff;text-decoration:none">View full table →</a>
           </div>
         </div>`
     }).join("")
