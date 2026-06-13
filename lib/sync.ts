@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { Confederation, Stage } from "@/lib/generated/prisma"
+import { Confederation, Prisma, Stage } from "@/lib/generated/prisma"
 
 const API_BASE = process.env.FOOTBALL_DATA_BASE_URL!
 const API_KEY = process.env.FOOTBALL_DATA_API_KEY!
@@ -26,10 +26,6 @@ const STAGE_MAP: Record<string, Stage> = {
   GROUP_STAGE: "GROUP", LAST_32: "R32", LAST_16: "R16",
   QUARTER_FINALS: "QF", SEMI_FINALS: "SF",
   THIRD_PLACE: "THIRD_PLACE", FINAL: "FINAL",
-}
-
-const STAGE_POINTS: Record<Stage, number> = {
-  GROUP: 1, R32: 3, R16: 6, QF: 12, SF: 25, THIRD_PLACE: 10, FINAL: 60,
 }
 
 // Run promise-returning functions sequentially. The production DB connection
@@ -82,9 +78,20 @@ export async function syncMatchesFromApi(): Promise<string> {
   const allTeams = await prisma.team.findMany({ select: { id: true, code: true } })
   const teamsByCode = Object.fromEntries(allTeams.map((t: { id: string; code: string }) => [t.code, t.id]))
 
-  // Build per-match functions then run in parallel batches (pool-safe, no long-held transaction)
-  type MatchFn = () => Promise<unknown>
-  const fns: MatchFn[] = []
+  type MatchRow = {
+    matchNumber: number
+    homeTeamId: string | null
+    awayTeamId: string | null
+    homeTeamPlaceholder: string | null
+    awayTeamPlaceholder: string | null
+    homeScore: number | null
+    awayScore: number | null
+    isDraw: boolean | null
+    winnerId: string | null
+  }
+
+  const matchRows: MatchRow[] = []
+  const groupTeamPairs = new Map<string, { groupId: string; teamId: string }>()
 
   for (const m of matches) {
     const stage: Stage = STAGE_MAP[m.stage] ?? "GROUP"
@@ -113,42 +120,48 @@ export async function syncMatchesFromApi(): Promise<string> {
     const homeTeamPlaceholder = homeTeamId ? null : (m.homeTeam?.name ?? null)
     const awayTeamPlaceholder = awayTeamId ? null : (m.awayTeam?.name ?? null)
 
-    fns.push(() => prisma.match.upsert({
-      where: { tournamentId_matchNumber: { tournamentId: tournament.id, matchNumber: m.id } },
-      update: { homeTeamId, awayTeamId, homeTeamPlaceholder, awayTeamPlaceholder, homeScore, awayScore, isDraw, winnerId },
-      create: {
-        tournamentId: tournament.id,
-        matchNumber: m.id,
-        stage,
-        groupId: group?.id ?? null,
-        kickoff: new Date(m.utcDate),
-        stadium: m.venue ?? "TBC",
-        homeTeamId,
-        awayTeamId,
-        homeTeamPlaceholder,
-        awayTeamPlaceholder,
-        homeScore,
-        awayScore,
-        isDraw,
-        winnerId,
-        pointsAvailable: STAGE_POINTS[stage],
-      },
-    }))
+    matchRows.push({
+      matchNumber: m.id,
+      homeTeamId, awayTeamId, homeTeamPlaceholder, awayTeamPlaceholder,
+      homeScore, awayScore, isDraw, winnerId,
+    })
 
     if (stage === "GROUP" && group) {
-      if (homeTeamId) fns.push(() => prisma.groupTeam.upsert({
-        where: { groupId_teamId: { groupId: group.id, teamId: homeTeamId } },
-        update: {},
-        create: { groupId: group.id, teamId: homeTeamId },
-      }))
-      if (awayTeamId) fns.push(() => prisma.groupTeam.upsert({
-        where: { groupId_teamId: { groupId: group.id, teamId: awayTeamId } },
-        update: {},
-        create: { groupId: group.id, teamId: awayTeamId },
-      }))
+      if (homeTeamId) groupTeamPairs.set(`${group.id}:${homeTeamId}`, { groupId: group.id, teamId: homeTeamId })
+      if (awayTeamId) groupTeamPairs.set(`${group.id}:${awayTeamId}`, { groupId: group.id, teamId: awayTeamId })
     }
   }
 
-  await batch(fns)
+  // Bulk-update existing matches (all 104 are pre-seeded with stage/group/kickoff/
+  // stadium/pointsAvailable) in one round trip instead of one upsert per match.
+  if (matchRows.length > 0) {
+    await prisma.$executeRaw`
+      UPDATE "Match" m
+      SET
+        "homeTeamId" = v."homeTeamId",
+        "awayTeamId" = v."awayTeamId",
+        "homeTeamPlaceholder" = v."homeTeamPlaceholder",
+        "awayTeamPlaceholder" = v."awayTeamPlaceholder",
+        "homeScore" = v."homeScore",
+        "awayScore" = v."awayScore",
+        "isDraw" = v."isDraw",
+        "winnerId" = v."winnerId"
+      FROM (VALUES ${Prisma.join(matchRows.map((r) => Prisma.sql`(
+        ${r.matchNumber}::int, ${r.homeTeamId}::text, ${r.awayTeamId}::text,
+        ${r.homeTeamPlaceholder}::text, ${r.awayTeamPlaceholder}::text,
+        ${r.homeScore}::int, ${r.awayScore}::int, ${r.isDraw}::bool, ${r.winnerId}::text
+      )`))}) AS v("matchNumber", "homeTeamId", "awayTeamId", "homeTeamPlaceholder", "awayTeamPlaceholder", "homeScore", "awayScore", "isDraw", "winnerId")
+      WHERE m."tournamentId" = ${tournament.id} AND m."matchNumber" = v."matchNumber"
+    `
+  }
+
+  if (groupTeamPairs.size > 0) {
+    await prisma.$executeRaw`
+      INSERT INTO "GroupTeam" ("groupId", "teamId")
+      VALUES ${Prisma.join([...groupTeamPairs.values()].map((p) => Prisma.sql`(${p.groupId}::text, ${p.teamId}::text)`))}
+      ON CONFLICT ("groupId", "teamId") DO NOTHING
+    `
+  }
+
   return `${matches.length} matches upserted`
 }
