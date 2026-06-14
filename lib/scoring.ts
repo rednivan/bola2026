@@ -64,13 +64,13 @@ export async function recalculateAllScores(): Promise<{ predictions: number; lea
       FROM agg
       WHERE agg.id = p.id
     `,
-    // 4. Recompute each league's standings, ranked by total score
+    // 4. Recompute each league's standings, ranked by total score (ties share a rank, e.g. 1,1,3)
     prisma.$executeRaw`
       UPDATE "LeagueMembership" lm
       SET "currentRank" = ranked.rnk
       FROM (
-        SELECT lm2.id, (ROW_NUMBER() OVER (
-          PARTITION BY lm2."leagueId" ORDER BY p."totalScore" DESC, lm2."joinedAt" ASC
+        SELECT lm2.id, (RANK() OVER (
+          PARTITION BY lm2."leagueId" ORDER BY p."totalScore" DESC
         ))::int AS rnk
         FROM "LeagueMembership" lm2
         JOIN "Prediction" p ON p.id = lm2."predictionId"
