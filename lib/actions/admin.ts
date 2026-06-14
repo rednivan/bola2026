@@ -112,6 +112,25 @@ export async function recalculateScores(): Promise<{ ok: boolean; message: strin
   }
 }
 
+// ─── Sync & recalculate now (same as the sync-and-score cron) ────────────────
+
+export async function runSyncAndRecalculate(): Promise<{ ok: boolean; message: string }> {
+  try {
+    await requireAdmin()
+    const syncMessage = await syncMatchesFromApi()
+    const { predictions, leagues } = await recalculateAllScores()
+    const message = `${syncMessage} · recalculated ${predictions} predictions across ${leagues} leagues`
+    await prisma.cronLog.create({ data: { job: "sync-and-score", ok: true, message } })
+    revalidatePath("/leagues")
+    revalidatePath("/admin")
+    return { ok: true, message }
+  } catch (e) {
+    const message = (e as Error).message
+    await prisma.cronLog.create({ data: { job: "sync-and-score", ok: false, message } }).catch(() => {})
+    return { ok: false, message }
+  }
+}
+
 // ─── Trigger matchday emails ──────────────────────────────────────────────────
 
 export async function triggerMatchdayEmails(

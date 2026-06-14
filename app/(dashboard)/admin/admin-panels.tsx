@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import {
-  syncTeams, syncMatches, syncAll,
+  syncTeams, syncMatches, syncAll, runSyncAndRecalculate,
   updateMatchScore, recalculateScores, triggerMatchdayEmails, sendKOReminder,
   updateTournamentDates, saveGroupStandings, calculateGroupStandingPoints,
   saveThirdPlaceQualifiers, calculateThirdPlacePoints,
@@ -206,6 +206,47 @@ function CronActivityPanel({ activity }: { activity: CronActivity }) {
           <p className="text-[#474A4A] text-xs">No cron runs recorded yet today.</p>
         )}
 
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Panel 0b: Sync & Recalculate Now ────────────────────────────────────────
+
+function SyncAndRecalculatePanel() {
+  const [isPending, startTransition] = useTransition()
+  const [result, setResult] = useState<Result>(null)
+
+  function run() {
+    startTransition(async () => {
+      setResult(null)
+      const r = await runSyncAndRecalculate()
+      setResult(r)
+    })
+  }
+
+  return (
+    <Card className="bg-[#0D1333] border-[#1E2B6E]">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4 text-[#3CAC3B]" />
+          <CardTitle className="text-white text-base">Sync & Recalculate Now</CardTitle>
+        </div>
+        <CardDescription className="text-[#D1D4D1]/60 text-xs">
+          Fetches the latest match results and updates every score and league
+          ranking — the same thing the automatic job does every 2 hours.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <ResultAlert result={result} />
+        <Button
+          onClick={run}
+          disabled={isPending}
+          className="bg-[#3CAC3B] hover:bg-[#2d9430] text-white font-semibold"
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${isPending ? "animate-spin" : ""}`} />
+          {isPending ? "Running…" : "Sync & recalculate now"}
+        </Button>
       </CardContent>
     </Card>
   )
@@ -1027,6 +1068,7 @@ export function AdminPanels({
       </div>
 
       <CronActivityPanel activity={cronActivity} />
+      <SyncAndRecalculatePanel />
 
       <UsersPanel users={users} />
       <SyncPanel />
