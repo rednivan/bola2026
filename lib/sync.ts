@@ -40,12 +40,21 @@ async function batch<T>(fns: (() => Promise<T>)[], size = 1): Promise<T[]> {
 }
 
 async function fdFetch(path: string) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "X-Auth-Token": API_KEY },
-    cache: "no-store",
-  })
-  if (!res.ok) throw new Error(`football-data.org ${path}: ${res.status} ${res.statusText}`)
-  return res.json()
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        headers: { "X-Auth-Token": API_KEY },
+        cache: "no-store",
+      })
+      if (!res.ok) throw new Error(`football-data.org ${path}: ${res.status} ${res.statusText}`)
+      return res.json()
+    } catch (e) {
+      // Retry once after a short delay — transient network blips (e.g. "fetch failed")
+      // would otherwise fail the whole sync-and-score cron run.
+      if (attempt >= 2) throw e
+      await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
 }
 
 export async function syncTeamsFromApi(): Promise<string> {
