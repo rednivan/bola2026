@@ -84,8 +84,10 @@ export async function syncMatchesFromApi(): Promise<string> {
   const groups = await prisma.tournamentGroup.findMany({ where: { tournamentId: tournament.id } })
   const groupByLetter = Object.fromEntries(groups.map((g: { letter: string; id: string }) => [g.letter, g]))
 
-  const allTeams = await prisma.team.findMany({ select: { id: true, code: true } })
-  const teamsByCode = Object.fromEntries(allTeams.map((t: { id: string; code: string }) => [t.code, t.id]))
+  const allTeams = await prisma.team.findMany({ select: { id: true, code: true, name: true } })
+  const teamsByCode = Object.fromEntries(allTeams.map((t: { id: string; code: string; name: string }) => [t.code, t.id]))
+  // Fallback for TLA mismatches between the teams API and matches API (e.g. URY vs URU)
+  const teamsByName = Object.fromEntries(allTeams.map((t: { id: string; code: string; name: string }) => [t.name.toLowerCase(), t.id]))
 
   type MatchRow = {
     matchNumber: number
@@ -106,8 +108,12 @@ export async function syncMatchesFromApi(): Promise<string> {
     const stage: Stage = STAGE_MAP[m.stage] ?? "GROUP"
     const groupLetter = m.group ? m.group.replace(/^GROUP_/, "") : null
     const group = groupLetter ? groupByLetter[groupLetter] : null
-    const homeTeamId = m.homeTeam?.tla ? (teamsByCode[m.homeTeam.tla] ?? null) : null
-    const awayTeamId = m.awayTeam?.tla ? (teamsByCode[m.awayTeam.tla] ?? null) : null
+    const homeTeamId = (m.homeTeam?.tla ? teamsByCode[m.homeTeam.tla] : null)
+      ?? (m.homeTeam?.name ? teamsByName[m.homeTeam.name.toLowerCase()] : null)
+      ?? null
+    const awayTeamId = (m.awayTeam?.tla ? teamsByCode[m.awayTeam.tla] : null)
+      ?? (m.awayTeam?.name ? teamsByName[m.awayTeam.name.toLowerCase()] : null)
+      ?? null
 
     let winnerId: string | null = null
     let isDraw: boolean | null = null
