@@ -51,7 +51,7 @@ export const getCachedGroupMatches = unstable_cache(
     },
     orderBy: [{ group: { letter: "asc" } }, { kickoff: "asc" }],
   }),
-  ["group-matches-2026"],
+  ["group-matches-2026-v2"],
   { revalidate: 86400 },
 )
 
