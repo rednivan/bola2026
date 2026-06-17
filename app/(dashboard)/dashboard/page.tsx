@@ -15,7 +15,7 @@ import { HowToGuide } from "@/components/how-to-guide"
 async function getDashboardData(userId: string) {
   // Phase 1: tournament ID from cache (~0 ms) — needed to avoid JOIN filters below
   const tournament = await getCachedTournament()
-  if (!tournament) return { tournament: null, predictions: [], leagues: [], upcomingMatches: [], recentMatches: [], pointsByMatch: {} as Record<string, number> }
+  if (!tournament) return { tournament: null, predictions: [], leagues: [], upcomingMatches: [], recentMatches: [], pointsByMatch: {} as Record<string, number>, predictedWinnerByMatch: {} as Record<string, string | null> }
 
   // Phase 2: user-specific queries use tournamentId directly (no JOIN);
   // match queries are served from cache
@@ -48,7 +48,23 @@ async function getDashboardData(userId: string) {
     pointsByMatch = Object.fromEntries(matchPoints.map((m) => [m.matchId, m._sum.pointsEarned ?? 0]))
   }
 
-  return { tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch }
+  // Predicted winner for each upcoming/live match (null = draw or no prediction)
+  let predictedWinnerByMatch: Record<string, string | null> = {}
+  if (predictions.length > 0 && upcomingMatches.length > 0) {
+    const preds = await prisma.matchPrediction.findMany({
+      where: {
+        prediction: { userId, tournamentId: tournament.id },
+        matchId: { in: upcomingMatches.map((m) => m.id) },
+      },
+      select: { matchId: true, predictedWinnerId: true, isDraw: true },
+      distinct: ["matchId"],
+    })
+    predictedWinnerByMatch = Object.fromEntries(
+      preds.map((mp) => [mp.matchId, mp.isDraw ? null : mp.predictedWinnerId])
+    )
+  }
+
+  return { tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch, predictedWinnerByMatch }
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -68,7 +84,7 @@ export default async function DashboardPage() {
   ])
   if (!dbUser) redirect("/login")
 
-  const { tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch } = data
+  const { tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch, predictedWinnerByMatch } = data
 
   const now = new Date()
   const tournamentStarted = tournament ? isPast(tournament.groupStageStart) : false
@@ -223,27 +239,36 @@ export default async function DashboardPage() {
               </p>
             ) : (
               <div className="space-y-3">
-                {upcomingMatches.map((match) => (
-                  <div key={match.id} className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 text-sm font-medium text-white">
-                        <span className="truncate">{match.homeTeam?.code ?? "TBD"}</span>
-                        <span className="text-[#474A4A] shrink-0 font-light">vs</span>
-                        <span className="truncate">{match.awayTeam?.code ?? "TBD"}</span>
+                {upcomingMatches.map((match) => {
+                  const isLive = match.kickoff <= now
+                  const predictedWinner = predictedWinnerByMatch[match.id] ?? null
+                  const homeColor = predictedWinner === match.homeTeamId ? "text-amber-400" : "text-white"
+                  const awayColor = predictedWinner === match.awayTeamId ? "text-amber-400" : "text-white"
+                  return (
+                    <div key={match.id} className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <span className={`truncate ${homeColor}`}>{match.homeTeam?.code ?? "TBD"}</span>
+                          <span className="text-[#474A4A] shrink-0 font-light">vs</span>
+                          <span className={`truncate ${awayColor}`}>{match.awayTeam?.code ?? "TBD"}</span>
+                        </div>
+                        <p className="text-[#D1D4D1]/50 text-xs mt-0.5">
+                          {isLive
+                            ? match.group ? `Group ${match.group.letter}` : STAGE_LABEL[match.stage]
+                            : <><LocalDate date={match.kickoff} fmt="d MMM · HH:mm" />{match.group && ` · Group ${match.group.letter}`}</>
+                          }
+                        </p>
                       </div>
-                      <p className="text-[#D1D4D1]/50 text-xs mt-0.5">
-                        <LocalDate date={match.kickoff} fmt="d MMM · HH:mm" />
-                        {match.group && ` · Group ${match.group.letter}`}
-                      </p>
+                      <div className="text-right shrink-0 ml-3">
+                        {isLive
+                          ? <Badge className="bg-[#E61D25] text-white text-xs animate-pulse">LIVE</Badge>
+                          : <Badge variant="outline" className="border-[#1E2B6E] text-[#D1D4D1]/70 text-xs">{STAGE_LABEL[match.stage]}</Badge>
+                        }
+                        <p className="text-[#3CAC3B] text-xs mt-1">{match.pointsAvailable} pts</p>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0 ml-3">
-                      <Badge variant="outline" className="border-[#1E2B6E] text-[#D1D4D1]/70 text-xs">
-                        {STAGE_LABEL[match.stage]}
-                      </Badge>
-                      <p className="text-[#3CAC3B] text-xs mt-1">{match.pointsAvailable} pts</p>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </CardContent>

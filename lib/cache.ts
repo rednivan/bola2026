@@ -68,14 +68,14 @@ export const getCachedUser = unstable_cache(
 // new Date() is evaluated at cache-population time; 5-min TTL keeps it fresh enough.
 export const getCachedUpcomingMatches = unstable_cache(
   (tournamentId: string) => prisma.match.findMany({
-    where: { tournamentId, kickoff: { gt: new Date() }, homeTeamId: { not: null }, homeScore: null },
+    where: { tournamentId, homeTeamId: { not: null }, homeScore: null },
     include: {
       homeTeam: { select: { name: true, code: true, flagUrl: true } },
       awayTeam: { select: { name: true, code: true, flagUrl: true } },
       group: { select: { letter: true } },
     },
     orderBy: { kickoff: "asc" },
-    take: 5,
+    take: 6,
   }),
   ["upcoming-matches"],
   { revalidate: 300 },
