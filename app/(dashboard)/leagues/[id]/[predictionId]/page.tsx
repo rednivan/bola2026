@@ -76,8 +76,10 @@ export default async function MemberPredictionPage({
   }
 
   const savedPicksMap: Record<string, { predictedWinnerId: string | null; isDraw: boolean }> = {}
+  const pointsByMatch: Record<string, number> = {}
   for (const mp of matchPredictions) {
     savedPicksMap[mp.matchId] = { predictedWinnerId: mp.predictedWinnerId, isDraw: mp.isDraw }
+    pointsByMatch[mp.matchId] = mp.pointsEarned
   }
 
   const savedKOPicksMap: Record<string, { predictedWinnerId: string | null; pointsEarned: number }> = {}
@@ -140,6 +142,7 @@ export default async function MemberPredictionPage({
         matchesByGroup={matchesByGroup}
         savedStandings={savedStandings}
         savedPicksMap={savedPicksMap}
+        pointsByMatch={pointsByMatch}
         savedThirdPlaceGroupIds={thirdPlacePicks.map((t) => t.groupId)}
         koMatches={koMatchesHydrated}
         savedKOPicksMap={savedKOPicksMap}

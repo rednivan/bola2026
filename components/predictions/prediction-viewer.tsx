@@ -22,6 +22,7 @@ type Props = {
   matchesByGroup: { letter: string; groupId: string; matches: GroupMatch[] }[]
   savedStandings: Record<string, Record<string, number>>
   savedPicksMap: Record<string, { predictedWinnerId: string | null; isDraw: boolean }>
+  pointsByMatch?: Record<string, number>
   savedThirdPlaceGroupIds: string[]
   koMatches: KOMatch[]
   savedKOPicksMap: Record<string, { predictedWinnerId: string | null; pointsEarned: number }>
@@ -39,6 +40,7 @@ export function PredictionViewer({
   matchesByGroup,
   savedStandings,
   savedPicksMap,
+  pointsByMatch = {},
   savedThirdPlaceGroupIds,
   koMatches,
   savedKOPicksMap,
@@ -120,6 +122,7 @@ export function PredictionViewer({
             onPickChange={noop}
             locked
             jokerMatchId={savedJokerPicks["GROUP"] ?? null}
+            pointsByMatch={pointsByMatch}
           />
         </TabsContent>
 
