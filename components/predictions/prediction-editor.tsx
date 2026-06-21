@@ -20,6 +20,9 @@ export type GroupMatch = {
   kickoff: Date
   homeTeam: Team | null
   awayTeam: Team | null
+  homeScore: number | null
+  awayScore: number | null
+  winnerId: string | null
 }
 
 export type GroupData = {
@@ -38,6 +41,7 @@ type Props = {
   savedThirdPlaceGroupIds: string[]
   standingsTotal: number
   matchTotal: number
+  pointsByMatch?: Record<string, number>
   locked: boolean
   koMatches: KOMatch[]
   savedKOPicksMap: Record<string, { predictedWinnerId: string | null; pointsEarned: number }>
@@ -261,6 +265,7 @@ export function PredictionEditor({
   savedThirdPlaceGroupIds,
   standingsTotal,
   matchTotal,
+  pointsByMatch = {},
   locked,
   koMatches,
   savedKOPicksMap,
@@ -517,6 +522,7 @@ export function PredictionEditor({
           }}
           locked={locked}
           jokerMatchId={savedJokerPicks["GROUP"] ?? null}
+          pointsByMatch={pointsByMatch}
         />
       </TabsContent>
 

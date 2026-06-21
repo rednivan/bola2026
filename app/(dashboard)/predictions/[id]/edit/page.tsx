@@ -79,8 +79,10 @@ export default async function EditPredictionPage({
 
   // savedPicksMap: matchId → { predictedWinnerId, isDraw }
   const savedPicksMap: Record<string, { predictedWinnerId: string | null; isDraw: boolean }> = {}
+  const pointsByMatch: Record<string, number> = {}
   for (const mp of matchPredictions) {
     savedPicksMap[mp.matchId] = { predictedWinnerId: mp.predictedWinnerId, isDraw: mp.isDraw }
+    pointsByMatch[mp.matchId] = mp.pointsEarned
   }
 
   // Build groups for editors
@@ -102,6 +104,9 @@ export default async function EditPredictionPage({
         kickoff: m.kickoff,
         homeTeam: m.homeTeam,
         awayTeam: m.awayTeam,
+        homeScore: m.homeScore,
+        awayScore: m.awayScore,
+        winnerId: m.winnerId,
       })),
   }))
 
@@ -184,6 +189,7 @@ export default async function EditPredictionPage({
         matchesByGroup={matchesByGroup}
         savedStandings={savedStandings}
         savedPicksMap={savedPicksMap}
+        pointsByMatch={pointsByMatch}
         savedThirdPlaceGroupIds={thirdPlacePicks.map((t) => t.groupId)}
         standingsTotal={groups.length * 4}
         matchTotal={groupMatches.length}

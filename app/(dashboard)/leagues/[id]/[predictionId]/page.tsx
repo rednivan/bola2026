@@ -102,6 +102,9 @@ export default async function MemberPredictionPage({
         kickoff: m.kickoff,
         homeTeam: m.homeTeam,
         awayTeam: m.awayTeam,
+        homeScore: m.homeScore,
+        awayScore: m.awayScore,
+        winnerId: m.winnerId,
       })),
   }))
 

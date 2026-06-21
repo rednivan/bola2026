@@ -45,13 +45,16 @@ export const getCachedGroupMatches = unstable_cache(
       id: true,
       groupId: true,
       kickoff: true,
+      homeScore: true,
+      awayScore: true,
+      winnerId: true,
       homeTeam: { select: { id: true, name: true, code: true, flagUrl: true } },
       awayTeam: { select: { id: true, name: true, code: true, flagUrl: true } },
       group: { select: { letter: true } },
     },
     orderBy: [{ group: { letter: "asc" } }, { kickoff: "asc" }],
   }),
-  ["group-matches-2026-v2"],
+  ["group-matches-2026-v3"],
   { revalidate: 86400 },
 )
 

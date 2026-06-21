@@ -16,6 +16,7 @@ type Props = {
   onSaveSuccess?: (savedCount: number) => void
   locked: boolean
   jokerMatchId: string | null
+  pointsByMatch?: Record<string, number>
 }
 
 function MatchRow({
@@ -25,6 +26,7 @@ function MatchRow({
   locked,
   isJoker,
   onJokerToggle,
+  pointsEarned,
 }: {
   match: GroupMatch
   choice: ResultChoice
@@ -32,6 +34,7 @@ function MatchRow({
   locked: boolean
   isJoker: boolean
   onJokerToggle: () => void
+  pointsEarned?: number
 }) {
   const base = "flex-1 py-2.5 text-xs font-bold rounded-md border transition-all min-h-[44px]"
   const active = "bg-[#E61D25] border-[#E61D25] text-white shadow-md shadow-[#E61D25]/20"
@@ -40,10 +43,16 @@ function MatchRow({
   const [showHome, setShowHome] = useState(false)
   const [showAway, setShowAway] = useState(false)
 
+  const hasResult = match.homeScore !== null && match.awayScore !== null
+  const homeWon = hasResult && match.homeScore! > match.awayScore!
+  const awayWon = hasResult && match.awayScore! > match.homeScore!
+
   function pick(c: ResultChoice) {
     if (locked) return
     onPick(choice === c ? null : c)
   }
+
+  const pickLabel = choice === "home" ? "1" : choice === "draw" ? "X" : choice === "away" ? "2" : "—"
 
   return (
     <div className={`grid grid-cols-[1fr_auto_1fr] gap-2 items-center py-2.5 border-b border-[#1E2B6E]/40 last:border-0 ${isJoker ? "bg-amber-950/20 -mx-4 px-4 rounded-lg" : ""}`}>
@@ -56,36 +65,50 @@ function MatchRow({
         {match.homeTeam?.flagUrl && (
           <img src={match.homeTeam.flagUrl} alt={match.homeTeam.code} className="w-6 h-4 object-cover rounded-sm shrink-0" />
         )}
-        <span className="text-white text-sm font-medium truncate hover:text-[#D1D4D1]/80 transition-colors">
+        <span className={`text-sm font-medium truncate transition-colors ${hasResult && homeWon ? "text-[#3CAC3B]" : "text-white hover:text-[#D1D4D1]/80"}`}>
           {showHome ? (match.homeTeam?.name ?? "TBD") : (match.homeTeam?.code ?? "TBD")}
         </span>
       </div>
 
-      {/* Buttons */}
+      {/* Center: buttons when unlocked, result when locked+played */}
       <div className="flex flex-col items-center gap-1 shrink-0">
-        <div className="flex items-center gap-1">
-          <button onClick={() => pick("home")} disabled={locked} title={`${match.homeTeam?.name} win`}
-            className={`${base} px-3 ${choice === "home" ? active : idleCls} ${locked ? dis : ""}`}>1</button>
-          <button onClick={() => pick("draw")} disabled={locked} title="Draw"
-            className={`${base} px-3 ${choice === "draw" ? active : idleCls} ${locked ? dis : ""}`}>X</button>
-          <button onClick={() => pick("away")} disabled={locked} title={`${match.awayTeam?.name} win`}
-            className={`${base} px-3 ${choice === "away" ? active : idleCls} ${locked ? dis : ""}`}>2</button>
-          <button
-            onClick={onJokerToggle}
-            disabled={locked}
-            title={isJoker ? "Remove joker" : "Set as joker (doubles points if correct)"}
-            className={`ml-1 w-7 h-7 flex items-center justify-center rounded-md border transition-all shrink-0 ${
-              isJoker
-                ? "bg-amber-600/30 border-amber-500/60 text-amber-400"
-                : "bg-[#131D42] border-[#2A398D] text-slate-400 hover:border-amber-500/60 hover:text-amber-400"
-            } ${locked ? dis : ""}`}
-          >
-            <Star className={`w-3.5 h-3.5 ${isJoker ? "fill-amber-400" : ""}`} />
-          </button>
-        </div>
-        <span className="text-[#474A4A] text-xs">
-          <LocalDate date={match.kickoff} fmt="d MMM" />
-        </span>
+        {locked && hasResult ? (
+          <>
+            <span className="text-white font-bold tabular-nums text-sm">
+              {match.homeScore} – {match.awayScore}
+            </span>
+            <span className="text-[#474A4A] text-xs">picked {pickLabel}{isJoker ? " ⭐" : ""}</span>
+            <span className={`text-xs font-bold tabular-nums ${(pointsEarned ?? 0) > 0 ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
+              +{pointsEarned ?? 0} pt{pointsEarned !== 1 ? "s" : ""}
+            </span>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-1">
+              <button onClick={() => pick("home")} disabled={locked} title={`${match.homeTeam?.name} win`}
+                className={`${base} px-3 ${choice === "home" ? active : idleCls} ${locked ? dis : ""}`}>1</button>
+              <button onClick={() => pick("draw")} disabled={locked} title="Draw"
+                className={`${base} px-3 ${choice === "draw" ? active : idleCls} ${locked ? dis : ""}`}>X</button>
+              <button onClick={() => pick("away")} disabled={locked} title={`${match.awayTeam?.name} win`}
+                className={`${base} px-3 ${choice === "away" ? active : idleCls} ${locked ? dis : ""}`}>2</button>
+              <button
+                onClick={onJokerToggle}
+                disabled={locked}
+                title={isJoker ? "Remove joker" : "Set as joker (doubles points if correct)"}
+                className={`ml-1 w-7 h-7 flex items-center justify-center rounded-md border transition-all shrink-0 ${
+                  isJoker
+                    ? "bg-amber-600/30 border-amber-500/60 text-amber-400"
+                    : "bg-[#131D42] border-[#2A398D] text-slate-400 hover:border-amber-500/60 hover:text-amber-400"
+                } ${locked ? dis : ""}`}
+              >
+                <Star className={`w-3.5 h-3.5 ${isJoker ? "fill-amber-400" : ""}`} />
+              </button>
+            </div>
+            <span className="text-[#474A4A] text-xs">
+              <LocalDate date={match.kickoff} fmt="d MMM" />
+            </span>
+          </>
+        )}
       </div>
 
       {/* Away */}
@@ -94,7 +117,7 @@ function MatchRow({
         title={match.awayTeam?.name}
         onClick={() => setShowAway((v) => !v)}
       >
-        <span className="text-white text-sm font-medium truncate hover:text-[#D1D4D1]/80 transition-colors">
+        <span className={`text-sm font-medium truncate transition-colors ${hasResult && awayWon ? "text-[#3CAC3B]" : "text-white hover:text-[#D1D4D1]/80"}`}>
           {showAway ? (match.awayTeam?.name ?? "TBD") : (match.awayTeam?.code ?? "TBD")}
         </span>
         {match.awayTeam?.flagUrl && (
@@ -105,7 +128,7 @@ function MatchRow({
   )
 }
 
-export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPickChange, onSaveSuccess, locked, jokerMatchId }: Props) {
+export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPickChange, onSaveSuccess, locked, jokerMatchId, pointsByMatch = {} }: Props) {
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
   const [currentJoker, setCurrentJoker] = useState<string | null>(jokerMatchId)
@@ -261,6 +284,7 @@ export function MatchResultsEditor({ predictionId, matchesByGroup, picks, onPick
                   locked={locked}
                   isJoker={currentJoker === match.id}
                   onJokerToggle={() => handleJokerToggle(match.id)}
+                  pointsEarned={pointsByMatch[match.id]}
                 />
               ))}
             </div>
