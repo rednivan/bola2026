@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Save, CheckCircle2, AlertCircle } from "lucide-react"
+import { Save, CheckCircle2, AlertCircle, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { saveThirdPlacePicks } from "@/lib/actions/predictions"
@@ -19,14 +19,20 @@ type Props = {
   locked: boolean
   onSelectionChange?: (groupIds: string[]) => void
   onSaveSuccess?: () => void
+  // Admin-confirmed final 8 qualifying groups. Undefined/incomplete means not finalized yet.
+  actualQualifiedGroupIds?: string[]
 }
 
 const MAX_PICKS = 8
 
-export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, onSelectionChange, onSaveSuccess }: Props) {
+export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, onSelectionChange, onSaveSuccess, actualQualifiedGroupIds }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set(savedGroupIds))
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
+
+  const isFinalized = locked && !!actualQualifiedGroupIds && actualQualifiedGroupIds.length === 8
+  const actualSet = new Set(actualQualifiedGroupIds ?? [])
+  const correctCount = isFinalized ? [...selected].filter((id) => actualSet.has(id)).length : 0
 
   function toggle(groupId: string) {
     if (locked) return
@@ -54,7 +60,14 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-white font-bold text-lg">Third-Place Qualifiers</h2>
+          <h2 className="text-white font-bold text-lg flex items-center gap-2">
+            Third-Place Qualifiers
+            {isFinalized && (
+              <span className={`text-xs font-bold tabular-nums ${correctCount > 0 ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
+                {correctCount}/8 pts
+              </span>
+            )}
+          </h2>
           <p className="text-[#D1D4D1]/60 text-sm mt-0.5">
             Select 8 of the 12 third-place finishers you predict will advance to the Round of 32.
           </p>
@@ -110,6 +123,8 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
         {groups.map((group) => {
           const isSelected = selected.has(group.id)
           const isDisabled = !isSelected && selected.size >= MAX_PICKS
+          const wasCorrect = isFinalized && isSelected && actualSet.has(group.id)
+          const wasWrong = isFinalized && isSelected && !actualSet.has(group.id)
 
           return (
             <button
@@ -117,7 +132,11 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
               onClick={() => toggle(group.id)}
               disabled={locked || isDisabled}
               className={`relative p-4 rounded-xl border-2 text-left transition-all
-                ${isSelected
+                ${wasCorrect
+                  ? "border-[#3CAC3B] bg-[#3CAC3B]/10 shadow-md shadow-[#3CAC3B]/10"
+                  : wasWrong
+                  ? "border-[#E61D25] bg-[#E61D25]/10"
+                  : isSelected
                   ? "border-[#3CAC3B] bg-[#3CAC3B]/10 shadow-md shadow-[#3CAC3B]/10"
                   : isDisabled
                   ? "border-[#1E2B6E] bg-[#0D1333]/50 opacity-30 cursor-not-allowed"
@@ -128,10 +147,10 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
             >
               <div className="flex items-center gap-2 mb-2">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
-                  ${isSelected ? "bg-[#3CAC3B] text-white" : "bg-[#1E2B6E] text-[#D1D4D1]"}`}>
+                  ${wasCorrect ? "bg-[#3CAC3B] text-white" : wasWrong ? "bg-[#E61D25] text-white" : isSelected ? "bg-[#3CAC3B] text-white" : "bg-[#1E2B6E] text-[#D1D4D1]"}`}>
                   {group.letter}
                 </span>
-                <span className={`text-xs font-medium ${isSelected ? "text-[#3CAC3B]" : "text-[#D1D4D1]/60"}`}>
+                <span className={`text-xs font-medium ${wasCorrect ? "text-[#3CAC3B]" : wasWrong ? "text-[#E61D25]" : isSelected ? "text-[#3CAC3B]" : "text-[#D1D4D1]/60"}`}>
                   Group {group.letter}
                 </span>
               </div>
@@ -153,7 +172,9 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
                 <p className="text-[#474A4A] text-xs italic">3rd place TBD</p>
               )}
 
-              {isSelected && (
+              {wasCorrect && <CheckCircle2 className="w-4 h-4 text-[#3CAC3B] absolute top-3 right-3" />}
+              {wasWrong && <XCircle className="w-4 h-4 text-[#E61D25] absolute top-3 right-3" />}
+              {!isFinalized && isSelected && (
                 <CheckCircle2 className="w-4 h-4 text-[#3CAC3B] absolute top-3 right-3" />
               )}
             </button>

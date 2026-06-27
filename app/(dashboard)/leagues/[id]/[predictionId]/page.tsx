@@ -50,7 +50,7 @@ export default async function MemberPredictionPage({
   const koMatchesHydrated = koMatches.map((m) => ({ ...m, kickoff: new Date(m.kickoff) }))
   const koMatchIds = new Set(koMatchesHydrated.map((m) => m.id))
 
-  const [groupStandings, allMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams] = await Promise.all([
+  const [groupStandings, allMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams, qualifiedThirdPlaceGroups] = await Promise.all([
     prisma.groupStandingPrediction.findMany({ where: { predictionId } }),
     prisma.matchPrediction.findMany({ where: { predictionId } }),
     prisma.thirdPlacePrediction.findMany({ where: { predictionId } }),
@@ -63,6 +63,10 @@ export default async function MemberPredictionPage({
         team: { select: { id: true, name: true, code: true, flagUrl: true } },
       },
       orderBy: [{ groupId: "asc" }, { actualPosition: "asc" }],
+    }),
+    prisma.groupTeam.findMany({
+      where: { group: { tournament: { year: 2026 } }, thirdPlaceQualified: true },
+      select: { groupId: true },
     }),
   ])
 
@@ -116,6 +120,7 @@ export default async function MemberPredictionPage({
     actualGroupOrdersMap[gt.groupId].push(gt.team)
   }
   const hasActualStandings = actualGroupTeams.length > 0
+  const actualThirdPlaceGroupIds = qualifiedThirdPlaceGroups.map((g) => g.groupId)
 
   return (
     <div className="p-6 lg:p-8 space-y-6 text-white">
@@ -148,6 +153,7 @@ export default async function MemberPredictionPage({
         savedKOPicksMap={savedKOPicksMap}
         savedJokerPicks={Object.fromEntries(jokerPicks.map((j: { stage: string; matchId: string }) => [j.stage, j.matchId]))}
         actualGroupOrders={hasActualStandings ? actualGroupOrdersMap : undefined}
+        actualThirdPlaceGroupIds={actualThirdPlaceGroupIds.length === 8 ? actualThirdPlaceGroupIds : undefined}
         now={now.getTime()}
       />
     </div>

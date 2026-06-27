@@ -53,6 +53,8 @@ type Props = {
   // Actual group standings (set by admin post-group stage). When present, overrides user's
   // group predictions for resolving KO bracket teams.
   actualGroupOrders?: Record<string, Team[]>
+  // Admin-confirmed final 8 third-place qualifying groups.
+  actualThirdPlaceGroupIds?: string[]
 }
 
 // ─── Group-stage helpers ───────────────────────────────────────────────────
@@ -274,6 +276,7 @@ export function PredictionEditor({
   initialTab,
   savedJokerPicks = {},
   actualGroupOrders,
+  actualThirdPlaceGroupIds,
 }: Props) {
   const [picks, setPicks] = useState<Record<string, ResultChoice>>(() =>
     initPicks(matchesByGroup, savedPicksMap, groups)
@@ -537,6 +540,7 @@ export function PredictionEditor({
             setActiveTab("thirdplace")
           }}
           locked={locked}
+          actualGroupOrders={actualGroupOrders}
         />
       </TabsContent>
 
@@ -551,6 +555,7 @@ export function PredictionEditor({
             setSavedThirdPlaceCount(8)
             setActiveTab("ko")
           }}
+          actualQualifiedGroupIds={actualThirdPlaceGroupIds}
         />
       </TabsContent>
 

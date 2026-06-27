@@ -14,13 +14,16 @@ type Props = {
   onReorder: (groupId: string, teams: Team[]) => void
   onSaveSuccess?: () => void
   locked: boolean
+  // Admin-confirmed final standings, ordered 1st→4th. Only present for groups
+  // the admin has saved — absence means "not finalized yet", no highlighting.
+  actualGroupOrders?: Record<string, Team[]>
 }
 
 function posColor(pos: number) {
   return pos === 1 ? "text-yellow-400" : pos === 2 ? "text-[#D1D4D1]" : pos === 3 ? "text-amber-500" : "text-[#474A4A]"
 }
 
-export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder, onSaveSuccess, locked }: Props) {
+export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder, onSaveSuccess, locked, actualGroupOrders }: Props) {
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
 
@@ -99,6 +102,15 @@ export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder,
           const teams = groupOrders[group.id] ?? group.teams
           const sorted = [...teams].sort((a, b) => (gPos[a.id] ?? 99) - (gPos[b.id] ?? 99))
 
+          // Actual final standings, if the admin has saved this group
+          const actualOrder = actualGroupOrders?.[group.id]
+          const actualPosByTeam: Record<string, number> = {}
+          if (actualOrder) actualOrder.forEach((t, i) => { actualPosByTeam[t.id] = i + 1 })
+          const isFinalized = locked && !!actualOrder
+          const correctCount = isFinalized
+            ? teams.filter((t) => actualPosByTeam[t.id] === gPos[t.id]).length
+            : 0
+
           return (
             <div key={group.id} className="bg-[#0D1333] border border-[#1E2B6E] rounded-xl p-4">
               <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
@@ -106,13 +118,21 @@ export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder,
                   {group.letter}
                 </span>
                 Group {group.letter}
+                {isFinalized && (
+                  <span className={`ml-auto text-xs font-bold tabular-nums ${correctCount > 0 ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
+                    {correctCount}/4 pts
+                  </span>
+                )}
               </h3>
 
               <div className="space-y-1.5">
                 {sorted.map((team) => {
                   const pos = gPos[team.id] ?? 1
+                  const isCorrect = isFinalized && actualPosByTeam[team.id] === pos
                   return (
-                    <div key={team.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg border bg-[#131D42] border-[#1E2B6E]">
+                    <div key={team.id} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border ${
+                      isCorrect ? "bg-[#3CAC3B]/10 border-[#3CAC3B]/40" : "bg-[#131D42] border-[#1E2B6E]"
+                    }`}>
                       <select
                         value={pos}
                         onChange={(e) => handlePositionChange(group.id, team.id, parseInt(e.target.value, 10))}
@@ -129,8 +149,9 @@ export function GroupStageEditor({ predictionId, groups, groupOrders, onReorder,
                       ) : (
                         <div className="w-6 h-4 bg-[#1E2B6E] rounded-sm shrink-0" />
                       )}
-                      <span className="text-white text-sm font-medium flex-1 min-w-0 truncate">{team.name}</span>
+                      <span className={`text-sm font-medium flex-1 min-w-0 truncate ${isCorrect ? "text-[#3CAC3B]" : "text-white"}`}>{team.name}</span>
                       <span className="text-[#474A4A] text-xs font-mono shrink-0">{team.code}</span>
+                      {isCorrect && <CheckCircle2 className="w-3.5 h-3.5 text-[#3CAC3B] shrink-0" />}
                     </div>
                   )
                 })}

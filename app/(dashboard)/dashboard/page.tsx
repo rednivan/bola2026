@@ -15,7 +15,14 @@ import { HowToGuide } from "@/components/how-to-guide"
 async function getDashboardData(userId: string) {
   // Phase 1: tournament ID from cache (~0 ms) — needed to avoid JOIN filters below
   const tournament = await getCachedTournament()
-  if (!tournament) return { tournament: null, predictions: [], leagues: [], upcomingMatches: [], recentMatches: [], pointsByMatch: {} as Record<string, number>, predictedWinnerByMatch: {} as Record<string, string | null> }
+  if (!tournament) return {
+    tournament: null, predictions: [], leagues: [], upcomingMatches: [], recentMatches: [],
+    pointsByMatch: {} as Record<string, number>, predictedWinnerByMatch: {} as Record<string, string | null>,
+    finalizedGroups: [] as { groupId: string; letter: string; teams: { id: string; name: string; code: string; flagUrl: string }[] }[],
+    thirdPlaceQualifiers: [] as { groupId: string; letter: string; team: { id: string; name: string; code: string; flagUrl: string } }[],
+    groupPointsByPrediction: {} as Record<string, Record<string, number>>,
+    thirdPlacePointsByPrediction: {} as Record<string, number>,
+  }
 
   // Phase 2: user-specific queries use tournamentId directly (no JOIN);
   // match queries are served from cache
@@ -64,7 +71,76 @@ async function getDashboardData(userId: string) {
     )
   }
 
-  return { tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch, predictedWinnerByMatch }
+  // Admin-confirmed final group standings — only groups where all 4 positions are saved
+  const actualGroupTeams = await prisma.groupTeam.findMany({
+    where: { group: { tournamentId: tournament.id }, actualPosition: { not: null } },
+    select: {
+      groupId: true,
+      actualPosition: true,
+      team: { select: { id: true, name: true, code: true, flagUrl: true } },
+      group: { select: { letter: true } },
+    },
+    orderBy: [{ groupId: "asc" }, { actualPosition: "asc" }],
+  })
+  const groupedByGroupId = new Map<string, typeof actualGroupTeams>()
+  for (const gt of actualGroupTeams) {
+    if (!groupedByGroupId.has(gt.groupId)) groupedByGroupId.set(gt.groupId, [])
+    groupedByGroupId.get(gt.groupId)!.push(gt)
+  }
+  const finalizedGroups = [...groupedByGroupId.entries()]
+    .filter(([, rows]) => rows.length === 4)
+    .map(([groupId, rows]) => ({ groupId, letter: rows[0].group.letter, teams: rows.map((r) => r.team) }))
+    .sort((a, b) => a.letter.localeCompare(b.letter))
+
+  // Admin-confirmed final 3rd-place qualifiers — only meaningful once exactly 8 are saved
+  const qualifiedThirdPlaceRows = await prisma.groupTeam.findMany({
+    where: { group: { tournamentId: tournament.id }, thirdPlaceQualified: true },
+    select: { groupId: true, team: { select: { id: true, name: true, code: true, flagUrl: true } }, group: { select: { letter: true } } },
+    orderBy: { group: { letter: "asc" } },
+  })
+  const thirdPlaceQualifiers = qualifiedThirdPlaceRows.length === 8
+    ? qualifiedThirdPlaceRows.map((r) => ({ groupId: r.groupId, letter: r.group.letter, team: r.team }))
+    : []
+
+  // Per-prediction points: x/4 per finalized group, x/8 for 3rd-place qualifiers
+  let groupPointsByPrediction: Record<string, Record<string, number>> = {}
+  let thirdPlacePointsByPrediction: Record<string, number> = {}
+  if (predictions.length > 0 && (finalizedGroups.length > 0 || thirdPlaceQualifiers.length > 0)) {
+    const predictionIds = predictions.map((p) => p.id)
+
+    if (finalizedGroups.length > 0) {
+      const actualPosByGroupTeam = new Map<string, number>()
+      for (const gt of actualGroupTeams) actualPosByGroupTeam.set(`${gt.groupId}:${gt.team.id}`, gt.actualPosition!)
+
+      const standingPreds = await prisma.groupStandingPrediction.findMany({
+        where: { predictionId: { in: predictionIds }, groupId: { in: finalizedGroups.map((g) => g.groupId) } },
+        select: { predictionId: true, groupId: true, teamId: true, predictedPosition: true },
+      })
+      for (const sp of standingPreds) {
+        const actualPos = actualPosByGroupTeam.get(`${sp.groupId}:${sp.teamId}`)
+        if (actualPos !== sp.predictedPosition) continue
+        if (!groupPointsByPrediction[sp.predictionId]) groupPointsByPrediction[sp.predictionId] = {}
+        groupPointsByPrediction[sp.predictionId][sp.groupId] = (groupPointsByPrediction[sp.predictionId][sp.groupId] ?? 0) + 1
+      }
+    }
+
+    if (thirdPlaceQualifiers.length > 0) {
+      const qualifiedSet = new Set(thirdPlaceQualifiers.map((q) => q.groupId))
+      const thirdPlacePreds = await prisma.thirdPlacePrediction.findMany({
+        where: { predictionId: { in: predictionIds } },
+        select: { predictionId: true, groupId: true },
+      })
+      for (const tp of thirdPlacePreds) {
+        if (!qualifiedSet.has(tp.groupId)) continue
+        thirdPlacePointsByPrediction[tp.predictionId] = (thirdPlacePointsByPrediction[tp.predictionId] ?? 0) + 1
+      }
+    }
+  }
+
+  return {
+    tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch, predictedWinnerByMatch,
+    finalizedGroups, thirdPlaceQualifiers, groupPointsByPrediction, thirdPlacePointsByPrediction,
+  }
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -84,7 +160,10 @@ export default async function DashboardPage() {
   ])
   if (!dbUser) redirect("/login")
 
-  const { tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch, predictedWinnerByMatch } = data
+  const {
+    tournament, predictions, leagues, upcomingMatches, recentMatches, pointsByMatch, predictedWinnerByMatch,
+    finalizedGroups, thirdPlaceQualifiers, groupPointsByPrediction, thirdPlacePointsByPrediction,
+  } = data
 
   const now = new Date()
   const tournamentStarted = tournament ? isPast(tournament.groupStageStart) : false
@@ -192,6 +271,73 @@ export default async function DashboardPage() {
                   <span className="text-[#D1D4D1]/50 text-xs tabular-nums">{Math.round(p.matchAccuracy)}%</span>
                 </div>
               </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Group stage results — only once admin has saved final standings / 3rd-place qualifiers */}
+      {predictions.length > 0 && (finalizedGroups.length > 0 || thirdPlaceQualifiers.length > 0) && (
+        <Card className="bg-[#0D1333] border-[#1E2B6E]">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-white text-base flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-[#3CAC3B]" />
+              Group Stage Results
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {predictions.map((p) => (
+              <div key={p.id} className="space-y-3">
+                {predictions.length > 1 && (
+                  <p className="text-white text-sm font-semibold">{p.name}</p>
+                )}
+
+                {finalizedGroups.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {finalizedGroups.map((g) => {
+                      const pts = groupPointsByPrediction[p.id]?.[g.groupId] ?? 0
+                      return (
+                        <div key={g.groupId} className="bg-[#131D42] border border-[#1E2B6E] rounded-lg p-2.5">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[#D1D4D1]/60 text-xs font-medium">Group {g.letter}</span>
+                            <span className={`text-xs font-bold tabular-nums ${pts > 0 ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
+                              {pts}/4
+                            </span>
+                          </div>
+                          <div className="space-y-0.5">
+                            {g.teams.map((t, i) => (
+                              <div key={t.id} className="flex items-center gap-1.5 text-xs">
+                                <span className="text-[#474A4A] w-3 shrink-0">{i + 1}</span>
+                                {t.flagUrl && <img src={t.flagUrl} alt={t.code} className="w-4 h-3 object-cover rounded-sm shrink-0" />}
+                                <span className="text-white truncate">{t.code}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {thirdPlaceQualifiers.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[#D1D4D1]/60 text-xs font-medium">3rd-Place Qualifiers</span>
+                      <span className={`text-xs font-bold tabular-nums ${(thirdPlacePointsByPrediction[p.id] ?? 0) > 0 ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
+                        {thirdPlacePointsByPrediction[p.id] ?? 0}/8
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {thirdPlaceQualifiers.map((q) => (
+                        <span key={q.groupId} className="flex items-center gap-1 bg-[#131D42] border border-[#1E2B6E] rounded-full px-2 py-1 text-xs text-white">
+                          {q.team.flagUrl && <img src={q.team.flagUrl} alt={q.team.code} className="w-4 h-3 object-cover rounded-sm" />}
+                          {q.team.code}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
           </CardContent>
         </Card>

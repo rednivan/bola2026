@@ -19,8 +19,8 @@ async function getPredictionData(predictionId: string) {
     getCachedKOMatches(),
   ])
 
-  // User-specific data: 5 queries instead of 7 (no JOIN filters needed)
-  const [prediction, groupStandings, allMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams] =
+  // User-specific data: 6 queries instead of 8 (no JOIN filters needed)
+  const [prediction, groupStandings, allMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams, qualifiedThirdPlaceGroups] =
     await Promise.all([
       prisma.prediction.findUnique({
         where: { id: predictionId },
@@ -41,6 +41,10 @@ async function getPredictionData(predictionId: string) {
         },
         orderBy: [{ groupId: "asc" }, { actualPosition: "asc" }],
       }),
+      prisma.groupTeam.findMany({
+        where: { group: { tournament: { year: 2026 } }, thirdPlaceQualified: true },
+        select: { groupId: true },
+      }),
     ])
 
   // unstable_cache serialises through JSON, so Date fields come back as strings — restore them
@@ -51,7 +55,7 @@ async function getPredictionData(predictionId: string) {
   const matchPredictions = allMatchPredictions.filter((mp) => !koMatchIds.has(mp.matchId))
   const koMatchPredictions = allMatchPredictions.filter((mp) => koMatchIds.has(mp.matchId))
 
-  return { prediction, groups, groupMatches: groupMatchesHydrated, koMatches: koMatchesHydrated, groupStandings, matchPredictions, koMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams }
+  return { prediction, groups, groupMatches: groupMatchesHydrated, koMatches: koMatchesHydrated, groupStandings, matchPredictions, koMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams, qualifiedThirdPlaceGroups }
 }
 
 export default async function EditPredictionPage({
@@ -65,7 +69,7 @@ export default async function EditPredictionPage({
   if (!session) redirect("/login")
   const user = session.user
 
-  const { prediction, groups, groupMatches, koMatches, groupStandings, matchPredictions, koMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams } =
+  const { prediction, groups, groupMatches, koMatches, groupStandings, matchPredictions, koMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams, qualifiedThirdPlaceGroups } =
     await getPredictionData(id)
 
   if (!prediction || prediction.userId !== user.id) notFound()
@@ -132,6 +136,7 @@ export default async function EditPredictionPage({
     actualGroupOrdersMap[gt.groupId].push(gt.team)
   }
   const hasActualStandings = actualGroupTeams.length > 0
+  const actualThirdPlaceGroupIds = qualifiedThirdPlaceGroups.map((g) => g.groupId)
 
   return (
     <div className="p-6 lg:p-8 space-y-6 text-white">
@@ -201,6 +206,7 @@ export default async function EditPredictionPage({
         initialTab={koStageStarted ? "ko" : isWindow2 ? "ko" : undefined}
         savedJokerPicks={Object.fromEntries(jokerPicks.map((j: { stage: string; matchId: string }) => [j.stage, j.matchId]))}
         actualGroupOrders={hasActualStandings ? actualGroupOrdersMap : undefined}
+        actualThirdPlaceGroupIds={actualThirdPlaceGroupIds.length === 8 ? actualThirdPlaceGroupIds : undefined}
       />
     </div>
   )

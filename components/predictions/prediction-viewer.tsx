@@ -28,6 +28,7 @@ type Props = {
   savedKOPicksMap: Record<string, { predictedWinnerId: string | null; pointsEarned: number }>
   savedJokerPicks?: Record<string, string>
   actualGroupOrders?: Record<string, Team[]>
+  actualThirdPlaceGroupIds?: string[]
   // Server-computed timestamp — used to decide which KO picks have kicked off
   now: number
 }
@@ -46,6 +47,7 @@ export function PredictionViewer({
   savedKOPicksMap,
   savedJokerPicks = {},
   actualGroupOrders,
+  actualThirdPlaceGroupIds,
   now,
 }: Props) {
   const groupOrders = initGroupOrders(groups, savedStandings)
@@ -133,6 +135,7 @@ export function PredictionViewer({
             groupOrders={groupOrders}
             onReorder={noop}
             locked
+            actualGroupOrders={actualGroupOrders}
           />
         </TabsContent>
 
@@ -142,6 +145,7 @@ export function PredictionViewer({
             groups={groupsWithThird}
             savedGroupIds={savedThirdPlaceGroupIds}
             locked
+            actualQualifiedGroupIds={actualThirdPlaceGroupIds}
           />
         </TabsContent>
 
