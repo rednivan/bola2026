@@ -67,9 +67,10 @@ export function PredictionViewer({
   // R32 teams come from the real synced fixture data only — see computeKOBracket.
   const resolvedKOTeams = computeKOBracket(koMatches, visibleKOPicks)
 
+  // Prefer the admin-confirmed actual 3rd-place team once known — see prediction-editor.tsx.
   const groupsWithThird = groups.map((g) => ({
     ...g,
-    thirdPlaceTeam: groupOrders[g.id]?.[2] ?? null,
+    thirdPlaceTeam: actualGroupOrders?.[g.id]?.[2] ?? groupOrders[g.id]?.[2] ?? null,
   }))
 
   return (

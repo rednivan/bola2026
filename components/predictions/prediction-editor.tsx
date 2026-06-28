@@ -317,9 +317,12 @@ export function PredictionEditor({
   const completionPct = effectiveTotal > 0 ? Math.round((effectiveSaved / effectiveTotal) * 100) : 0
   const isFullySubmitted = effectiveTotal > 0 && effectiveSaved >= effectiveTotal
 
+  // Prefer the admin-confirmed actual 3rd-place team once known — showing the
+  // viewer's own (possibly wrong) predicted 3rd-place team next to an actually-
+  // correct/incorrect highlight is misleading once real standings exist.
   const groupsWithThird = groups.map((g) => ({
     ...g,
-    thirdPlaceTeam: groupOrders[g.id]?.[2] ?? null,
+    thirdPlaceTeam: actualGroupOrders?.[g.id]?.[2] ?? groupOrders[g.id]?.[2] ?? null,
   }))
 
   // KO bracket: R32 teams come from the real synced fixture data only (see
