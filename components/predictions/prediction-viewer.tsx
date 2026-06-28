@@ -51,11 +51,9 @@ export function PredictionViewer({
   now,
 }: Props) {
   const groupOrders = initGroupOrders(groups, savedStandings)
-  const effectiveGroupOrders = actualGroupOrders ? { ...groupOrders, ...actualGroupOrders } : groupOrders
   const picks = initPicks(matchesByGroup, savedPicksMap, groups)
-  const thirdPlaceGroupIds = new Set(savedThirdPlaceGroupIds)
 
-  const koPicks = initKOPicksIterative(koMatches, savedKOPicksMap, groups, effectiveGroupOrders, thirdPlaceGroupIds)
+  const koPicks = initKOPicksIterative(koMatches, savedKOPicksMap)
 
   // Only reveal KO picks for matches that have already kicked off — keeps later
   // rounds (and whoever is leading) from being copyable before they lock.
@@ -66,10 +64,8 @@ export function PredictionViewer({
   const visibleKOJokers = Object.fromEntries(
     Object.entries(savedJokerPicks).filter(([, matchId]) => revealedKOIds.has(matchId))
   )
-  // Display only confirmed standings/qualifiers — until the admin saves a group's final
-  // standings or the 3rd-place qualifiers, show TBD rather than this prediction's own pick.
-  const confirmedThirdPlaceGroupIds = new Set(actualThirdPlaceGroupIds ?? [])
-  const resolvedKOTeams = computeKOBracket(koMatches, groups, actualGroupOrders ?? {}, confirmedThirdPlaceGroupIds, visibleKOPicks)
+  // R32 teams come from the real synced fixture data only — see computeKOBracket.
+  const resolvedKOTeams = computeKOBracket(koMatches, visibleKOPicks)
 
   const groupsWithThird = groups.map((g) => ({
     ...g,

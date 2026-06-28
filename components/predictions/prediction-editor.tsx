@@ -113,26 +113,20 @@ function recalcGroupOrder(
 // ─── KO-bracket helpers ───────────────────────────────────────────────────
 
 // Iteratively resolves saved KO picks stage-by-stage.
-// Pre-tournament, KO matches have null DB teams, so we match predictedWinnerId
-// against the bracket-derived teams (from group predictions) instead.
 // Each stage's picks feed the cascade so the next stage can be resolved too.
 export function initKOPicksIterative(
   koMatches: KOMatch[],
   savedMap: Props["savedKOPicksMap"],
-  groups: GroupData[],
-  groupOrders: Record<string, Team[]>,
-  thirdPlaceGroupIds: Set<string>
 ): Record<string, KOPick> {
   const STAGES = ["R32", "R16", "QF", "SF", "THIRD_PLACE", "FINAL"]
   let currentPicks: Record<string, KOPick> = {}
 
   for (const stage of STAGES) {
-    const bracket = computeKOBracket(koMatches, groups, groupOrders, thirdPlaceGroupIds, currentPicks)
+    const bracket = computeKOBracket(koMatches, currentPicks)
     for (const m of koMatches.filter((m) => m.stage === stage)) {
       const saved = savedMap[m.id]
       if (!saved || saved.predictedWinnerId === null) continue
       const resolved = bracket[m.id]
-      // Match against DB teams (post-group-stage) or bracket-derived teams (pre-tournament)
       if (
         saved.predictedWinnerId === m.homeTeam?.id ||
         (resolved?.home && saved.predictedWinnerId === resolved.home.id)
@@ -149,19 +143,8 @@ export function initKOPicksIterative(
   return currentPicks
 }
 
-// Adjacent group pairs for the R32 bracket (A↔B, C↔D, E↔F, G↔H, I↔J, K↔L).
-// Within each pair: 1st of left vs 2nd of right, and 1st of right vs 2nd of left.
-// Last 4 slots (indices 12–15) are the 3rd-place matchups.
-const GROUP_PAIRS: [string, string][] = [
-  ["A", "B"], ["C", "D"], ["E", "F"],
-  ["G", "H"], ["I", "J"], ["K", "L"],
-]
-
 export function computeKOBracket(
   koMatches: KOMatch[],
-  groups: GroupData[],
-  groupOrders: Record<string, Team[]>,
-  thirdPlaceGroupIds: Set<string>,
   koPicks: Record<string, KOPick>
 ): Record<string, { home: Team | null; away: Team | null }> {
   const byDate = (ms: KOMatch[]) => [...ms].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
@@ -173,46 +156,17 @@ export function computeKOBracket(
   const thirdPlaceMatch = koMatches.find((m) => m.stage === "THIRD_PLACE")
   const finalMatch      = koMatches.find((m) => m.stage === "FINAL")
 
-  const groupByLetter: Record<string, GroupData> = Object.fromEntries(groups.map((g) => [g.letter, g]))
-
-  // No fallback to the group's unsorted team list here — a group with no entry in
-  // groupOrders means its standings aren't confirmed yet, so the slot should resolve
-  // to null (→ shown as TBD) rather than guessing an arbitrary, unranked team.
-  function groupTeam(letter: string, pos: number): Team | null {
-    const g = groupByLetter[letter]
-    if (!g) return null
-    return groupOrders[g.id]?.[pos - 1] ?? null
-  }
-
-  // 3rd-place teams that advance, sorted alphabetically by group letter
-  const advancing3rd: Team[] = groups
-    .filter((g) => thirdPlaceGroupIds.has(g.id))
-    .sort((a, b) => a.letter.localeCompare(b.letter))
-    .map((g) => groupOrders[g.id]?.[2] ?? null)
-    .filter((t): t is Team => t !== null)
-
-  // Build R32 slot definitions (16 entries)
   type Slot = { home: Team | null; away: Team | null }
-  const r32Slots: Slot[] = []
-  for (const [g1, g2] of GROUP_PAIRS) {
-    r32Slots.push({ home: groupTeam(g1, 1), away: groupTeam(g2, 2) })
-    r32Slots.push({ home: groupTeam(g2, 1), away: groupTeam(g1, 2) })
-  }
-  // Remaining 4 slots are 3rd-place vs 3rd-place (sequential pairing)
-  for (let i = 0; i < 4; i++) {
-    r32Slots.push({ home: advancing3rd[i * 2] ?? null, away: advancing3rd[i * 2 + 1] ?? null })
-  }
-
   const result: Record<string, Slot> = {}
 
-  // R32: map date-sorted slots to derived predictions
-  for (let i = 0; i < r32.length; i++) {
-    const m = r32[i]
-    const slot = r32Slots[i]
-    result[m.id] = {
-      home: m.homeTeam ?? slot?.home ?? null,
-      away: m.awayTeam ?? slot?.away ?? null,
-    }
+  // R32 teams come solely from the real synced fixture data (football-data.org).
+  // We previously tried to guess each slot from group standings using an assumed
+  // "Group A vs Group B" cross-pairing, but FIFA's actual 48-team seeding rule for
+  // the 8 wildcard 3rd-place teams doesn't follow that simple pattern — the guess
+  // routinely put the same team into two different slots. Showing TBD until the
+  // real fixture is confirmed is correct; a wrong guess is worse than no guess.
+  for (const m of r32) {
+    result[m.id] = { home: m.homeTeam ?? null, away: m.awayTeam ?? null }
   }
 
   function winner(matchId: string): Team | null {
@@ -290,15 +244,9 @@ export function PredictionEditor({
   const [thirdPlaceGroupIds, setThirdPlaceGroupIds] = useState<Set<string>>(
     () => new Set(savedThirdPlaceGroupIds)
   )
-  const [koPicks, setKOPicks] = useState<Record<string, KOPick>>(() => {
-    // Bootstrap: compute initial bracket from saved group/3rd-place data, then
-    // walk stage-by-stage so each stage's picks cascade into the next.
-    // When actual standings are available (Window 2+), use them over user's predictions.
-    const initOrders = initGroupOrders(groups, savedStandings)
-    const effectiveOrders = actualGroupOrders ? { ...initOrders, ...actualGroupOrders } : initOrders
-    const initThirdIds = new Set(savedThirdPlaceGroupIds)
-    return initKOPicksIterative(koMatches, savedKOPicksMap, groups, effectiveOrders, initThirdIds)
-  })
+  const [koPicks, setKOPicks] = useState<Record<string, KOPick>>(() =>
+    initKOPicksIterative(koMatches, savedKOPicksMap)
+  )
 
   // Saved counts — initialised from server props, updated optimistically when saves succeed
   const [savedMatchCount, setSavedMatchCount] = useState(
@@ -374,13 +322,9 @@ export function PredictionEditor({
     thirdPlaceTeam: groupOrders[g.id]?.[2] ?? null,
   }))
 
-  // KO bracket: compute resolved teams for each KO match slot.
-  // Actual standings override user's group predictions when available (Window 2+).
-  // Display only confirmed standings/qualifiers here — until the admin saves a group's
-  // final standings or the 3rd-place qualifiers, the bracket should show TBD rather than
-  // a team derived from the viewer's own (unconfirmed) predictions.
-  const confirmedThirdPlaceGroupIds = new Set(actualThirdPlaceGroupIds ?? [])
-  const resolvedKOTeams = computeKOBracket(koMatches, groups, actualGroupOrders ?? {}, confirmedThirdPlaceGroupIds, koPicks)
+  // KO bracket: R32 teams come from the real synced fixture data only (see
+  // computeKOBracket) — later rounds cascade from koPicks as before.
+  const resolvedKOTeams = computeKOBracket(koMatches, koPicks)
 
   function badge(filled: number, total: number) {
     const done = filled === total
