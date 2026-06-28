@@ -143,18 +143,49 @@ export function initKOPicksIterative(
   return currentPicks
 }
 
+// Official Round-of-16-through-Final bracket structure for the 2026 World Cup,
+// keyed by each match's stable matchNumber (football-data.org's persistent fixture
+// ID — survives re-syncs, unlike DB row ids or kickoff-sorted array position).
+//
+// The previous implementation paired matches by kickoff-date order within each
+// stage, assuming round N's matches feed into round N+1 in that same chronological
+// sequence. That's wrong — FIFA's actual bracket tree doesn't follow date order
+// (e.g. the real Round of 16 match at NRG Stadium is fed by the Round of 32
+// matches at SoFi Stadium June 28 and Estadio BBVA June 30, which aren't adjacent
+// in kickoff order). This caused R16+ matchups to not match FIFA's published
+// bracket once users picked R32 winners.
+//
+// Verified by cross-referencing every match's stadium and kickoff time against
+// Wikipedia's "2026 FIFA World Cup knockout stage" page: all 8 Round of 16 venues,
+// all 4 Quarterfinal venues, both Semifinal venues, and the Final/Third-place
+// venues match exactly, and resolving the Round of 32 from confirmed group
+// standings (winner/runner-up/3rd-place-wildcard roles) against this feeder graph
+// accounts for all 16 real Round of 32 matchups with no conflicts.
+const KO_FEEDERS: Record<number, [number, number]> = {
+  537376: [537417, 537418], // R16 @ NRG Stadium
+  537375: [537415, 537416], // R16 @ Lincoln Financial Field
+  537377: [537423, 537424], // R16 @ MetLife Stadium
+  537378: [537425, 537426], // R16 @ Estadio Azteca
+  537379: [537419, 537420], // R16 @ AT&T Stadium
+  537380: [537421, 537422], // R16 @ Lumen Field
+  537381: [537427, 537428], // R16 @ Mercedes-Benz Stadium
+  537382: [537429, 537430], // R16 @ BC Place
+  537383: [537376, 537375], // QF @ Gillette Stadium
+  537384: [537379, 537380], // QF @ SoFi Stadium
+  537385: [537377, 537378], // QF @ Hard Rock Stadium
+  537386: [537381, 537382], // QF @ Arrowhead Stadium
+  537387: [537383, 537384], // SF @ AT&T Stadium
+  537388: [537385, 537386], // SF @ Mercedes-Benz Stadium
+  537390: [537387, 537388], // Final @ MetLife Stadium (winners)
+  537389: [537387, 537388], // Third place @ Hard Rock Stadium (losers)
+}
+const THIRD_PLACE_MATCH_NUMBER = 537389
+
 export function computeKOBracket(
   koMatches: KOMatch[],
   koPicks: Record<string, KOPick>
 ): Record<string, { home: Team | null; away: Team | null }> {
-  const byDate = (ms: KOMatch[]) => [...ms].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
-
-  const r32 = byDate(koMatches.filter((m) => m.stage === "R32"))
-  const r16 = byDate(koMatches.filter((m) => m.stage === "R16"))
-  const qf  = byDate(koMatches.filter((m) => m.stage === "QF"))
-  const sf  = byDate(koMatches.filter((m) => m.stage === "SF"))
-  const thirdPlaceMatch = koMatches.find((m) => m.stage === "THIRD_PLACE")
-  const finalMatch      = koMatches.find((m) => m.stage === "FINAL")
+  const byMatchNumber = new Map(koMatches.map((m) => [m.matchNumber, m]))
 
   type Slot = { home: Team | null; away: Team | null }
   const result: Record<string, Slot> = {}
@@ -165,7 +196,7 @@ export function computeKOBracket(
   // the 8 wildcard 3rd-place teams doesn't follow that simple pattern — the guess
   // routinely put the same team into two different slots. Showing TBD until the
   // real fixture is confirmed is correct; a wrong guess is worse than no guess.
-  for (const m of r32) {
+  for (const m of koMatches.filter((m) => m.stage === "R32")) {
     result[m.id] = { home: m.homeTeam ?? null, away: m.awayTeam ?? null }
   }
 
@@ -182,31 +213,19 @@ export function computeKOBracket(
     return slot ? (pick === "home" ? slot.away : slot.home) : null
   }
 
-  // Cascade: each round pairs sequential matches from the previous round
-  function cascade(roundMatches: KOMatch[], feeders: KOMatch[]) {
-    for (let i = 0; i < roundMatches.length; i++) {
-      const m = roundMatches[i]
+  // Process rounds in bracket order so each round's winners are available before
+  // the next round looks them up.
+  for (const stage of ["R16", "QF", "SF", "FINAL", "THIRD_PLACE"] as const) {
+    for (const m of koMatches.filter((x) => x.stage === stage)) {
+      const feeders = KO_FEEDERS[m.matchNumber]
+      const [matchA, matchB] = feeders
+        ? [byMatchNumber.get(feeders[0]) ?? null, byMatchNumber.get(feeders[1]) ?? null]
+        : [null, null]
+      const resolve = m.matchNumber === THIRD_PLACE_MATCH_NUMBER ? loser : winner
       result[m.id] = {
-        home: m.homeTeam ?? (feeders[i * 2] ? winner(feeders[i * 2].id) : null),
-        away: m.awayTeam ?? (feeders[i * 2 + 1] ? winner(feeders[i * 2 + 1].id) : null),
+        home: m.homeTeam ?? (matchA ? resolve(matchA.id) : null),
+        away: m.awayTeam ?? (matchB ? resolve(matchB.id) : null),
       }
-    }
-  }
-
-  cascade(r16, r32)
-  cascade(qf, r16)
-  cascade(sf, qf)
-
-  if (finalMatch) {
-    result[finalMatch.id] = {
-      home: finalMatch.homeTeam ?? (sf[0] ? winner(sf[0].id) : null),
-      away: finalMatch.awayTeam ?? (sf[1] ? winner(sf[1].id) : null),
-    }
-  }
-  if (thirdPlaceMatch) {
-    result[thirdPlaceMatch.id] = {
-      home: thirdPlaceMatch.homeTeam ?? (sf[0] ? loser(sf[0].id) : null),
-      away: thirdPlaceMatch.awayTeam ?? (sf[1] ? loser(sf[1].id) : null),
     }
   }
 
