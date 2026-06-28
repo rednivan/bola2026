@@ -947,6 +947,7 @@ export type UserRow = {
   createdAt: Date
   hasPrediction: boolean
   predictionComplete: boolean
+  koComplete: boolean
   leagues: string[]
   createdLeague: boolean
 }
@@ -960,6 +961,7 @@ function Tick({ yes }: { yes: boolean }) {
 function UsersPanel({ users }: { users: UserRow[] }) {
   const withPrediction = users.filter((u) => u.hasPrediction).length
   const completed      = users.filter((u) => u.predictionComplete).length
+  const koCompleted    = users.filter((u) => u.koComplete).length
   const inLeague       = users.filter((u) => u.leagues.length > 0).length
 
   return (
@@ -982,10 +984,11 @@ function UsersPanel({ users }: { users: UserRow[] }) {
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {[
           { label: "In a league",    value: inLeague },
           { label: "Created league", value: users.filter((u) => u.createdLeague).length },
+          { label: "KO complete",    value: koCompleted },
         ].map(({ label, value }) => (
           <div key={label} className="bg-[#0D1333] border border-[#1E2B6E] rounded-lg p-3 text-center">
             <p className="text-white font-bold text-xl tabular-nums">{value}</p>
@@ -997,10 +1000,10 @@ function UsersPanel({ users }: { users: UserRow[] }) {
       {/* Table */}
       <Card className="bg-[#0D1333] border-[#1E2B6E]">
         <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-[#1E2B6E]">
-                {["Name", "Email", "Prediction", "Completed", "Leagues", "Created League"].map((h) => (
+                {["Name", "Email", "Prediction", "Completed", "KO Complete", "Leagues", "Created League"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[#D1D4D1]/60 text-xs font-medium first:rounded-tl-xl last:rounded-tr-xl">
                     {h}
                   </th>
@@ -1014,6 +1017,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
                   <td className="px-4 py-2.5 text-[#D1D4D1]/70 whitespace-nowrap">{u.email}</td>
                   <td className="px-4 py-2.5 text-center"><Tick yes={u.hasPrediction} /></td>
                   <td className="px-4 py-2.5 text-center"><Tick yes={u.predictionComplete} /></td>
+                  <td className="px-4 py-2.5 text-center"><Tick yes={u.koComplete} /></td>
                   <td className="px-4 py-2.5">
                     {u.leagues.length > 0
                       ? <div className="flex flex-wrap gap-1">
@@ -1028,7 +1032,7 @@ function UsersPanel({ users }: { users: UserRow[] }) {
                 </tr>
               ))}
               {users.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-[#474A4A] text-sm">No users yet.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-[#474A4A] text-sm">No users yet.</td></tr>
               )}
             </tbody>
           </table>

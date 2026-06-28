@@ -197,6 +197,7 @@ export default async function AdminPage() {
       const saved = p._count.matchPredictions + p._count.standingPredictions + p._count.thirdPlacePredictions
       return groupOnlyTotal > 0 && saved >= groupOnlyTotal
     }),
+    koComplete: u.predictions.some((p) => p.status === "COMPLETE"),
     leagues: [...new Set(u.predictions.flatMap((p) => p.leagueMemberships.map((m) => m.league.name)))],
     createdLeague: u.createdLeagues.length > 0,
   }))
