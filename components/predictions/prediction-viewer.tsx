@@ -66,7 +66,10 @@ export function PredictionViewer({
   const visibleKOJokers = Object.fromEntries(
     Object.entries(savedJokerPicks).filter(([, matchId]) => revealedKOIds.has(matchId))
   )
-  const resolvedKOTeams = computeKOBracket(koMatches, groups, effectiveGroupOrders, thirdPlaceGroupIds, visibleKOPicks)
+  // Display only confirmed standings/qualifiers — until the admin saves a group's final
+  // standings or the 3rd-place qualifiers, show TBD rather than this prediction's own pick.
+  const confirmedThirdPlaceGroupIds = new Set(actualThirdPlaceGroupIds ?? [])
+  const resolvedKOTeams = computeKOBracket(koMatches, groups, actualGroupOrders ?? {}, confirmedThirdPlaceGroupIds, visibleKOPicks)
 
   const groupsWithThird = groups.map((g) => ({
     ...g,

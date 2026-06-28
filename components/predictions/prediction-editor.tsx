@@ -175,17 +175,20 @@ export function computeKOBracket(
 
   const groupByLetter: Record<string, GroupData> = Object.fromEntries(groups.map((g) => [g.letter, g]))
 
+  // No fallback to the group's unsorted team list here — a group with no entry in
+  // groupOrders means its standings aren't confirmed yet, so the slot should resolve
+  // to null (→ shown as TBD) rather than guessing an arbitrary, unranked team.
   function groupTeam(letter: string, pos: number): Team | null {
     const g = groupByLetter[letter]
     if (!g) return null
-    return (groupOrders[g.id] ?? g.teams)[pos - 1] ?? null
+    return groupOrders[g.id]?.[pos - 1] ?? null
   }
 
   // 3rd-place teams that advance, sorted alphabetically by group letter
   const advancing3rd: Team[] = groups
     .filter((g) => thirdPlaceGroupIds.has(g.id))
     .sort((a, b) => a.letter.localeCompare(b.letter))
-    .map((g) => (groupOrders[g.id] ?? g.teams)[2] ?? null)
+    .map((g) => groupOrders[g.id]?.[2] ?? null)
     .filter((t): t is Team => t !== null)
 
   // Build R32 slot definitions (16 entries)
@@ -373,8 +376,11 @@ export function PredictionEditor({
 
   // KO bracket: compute resolved teams for each KO match slot.
   // Actual standings override user's group predictions when available (Window 2+).
-  const effectiveGroupOrders = actualGroupOrders ? { ...groupOrders, ...actualGroupOrders } : groupOrders
-  const resolvedKOTeams = computeKOBracket(koMatches, groups, effectiveGroupOrders, thirdPlaceGroupIds, koPicks)
+  // Display only confirmed standings/qualifiers here — until the admin saves a group's
+  // final standings or the 3rd-place qualifiers, the bracket should show TBD rather than
+  // a team derived from the viewer's own (unconfirmed) predictions.
+  const confirmedThirdPlaceGroupIds = new Set(actualThirdPlaceGroupIds ?? [])
+  const resolvedKOTeams = computeKOBracket(koMatches, groups, actualGroupOrders ?? {}, confirmedThirdPlaceGroupIds, koPicks)
 
   function badge(filled: number, total: number) {
     const done = filled === total
