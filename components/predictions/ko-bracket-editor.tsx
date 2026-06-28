@@ -35,6 +35,8 @@ const STAGE_META: Record<string, { label: string }> = {
 }
 
 const STAGE_ORDER = ["R32", "R16", "QF", "SF", "THIRD_PLACE", "FINAL"]
+// Stages where the user picks their own joker (THIRD_PLACE is auto-assigned, FINAL has none)
+const JOKER_STAGES = ["R32", "R16", "QF", "SF"]
 
 type Props = {
   predictionId: string
@@ -132,8 +134,9 @@ function KOMatchCard({ match, pick, resolvedHome, resolvedAway, onPick, locked }
 }
 
 export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, onSaveSuccess, resolvedTeams, locked, jokerMatchIds = {} }: Props) {
-  const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
+  const [status, setStatus] = useState<"idle" | "saved" | "incomplete" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
+  const [incompleteMsg, setIncompleteMsg] = useState("")
 
   const thirdPlaceMatch = koMatches.find(m => m.stage === "THIRD_PLACE")
 
@@ -159,6 +162,7 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
       else next[stage] = newMatchId
       return next
     })
+    setStatus("idle")
     saveJokerPick(predictionId, stage, newMatchId ?? null)
   }
 
@@ -188,7 +192,31 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
         }
       })
 
-    setStatus("saved")
+    // Build a clear "what's missing" summary so users know exactly what to fix.
+    const missingByStage: Record<string, number> = {}
+    for (const m of koMatches) {
+      if (!picks[m.id]) missingByStage[m.stage] = (missingByStage[m.stage] ?? 0) + 1
+    }
+    const missingMatchStages = STAGE_ORDER.filter((s) => missingByStage[s])
+    const missingMatchCount = Object.values(missingByStage).reduce((a, b) => a + b, 0)
+    const missingJokerStages = JOKER_STAGES.filter((s) => !jokers[s])
+
+    if (missingMatchCount > 0 || missingJokerStages.length > 0) {
+      const parts: string[] = []
+      if (missingMatchCount > 0) {
+        const breakdown = missingMatchStages.map((s) => `${STAGE_META[s].label} (${missingByStage[s]})`).join(", ")
+        parts.push(`${missingMatchCount} match${missingMatchCount === 1 ? "" : "es"} not picked — ${breakdown}`)
+      }
+      if (missingJokerStages.length > 0) {
+        parts.push(`joker not set for ${missingJokerStages.map((s) => STAGE_META[s].label).join(", ")}`)
+      }
+      setStatus("incomplete")
+      setIncompleteMsg(`Saved, but incomplete: ${parts.join("; ")}.`)
+    } else {
+      setStatus("saved")
+      setIncompleteMsg("")
+    }
+
     onSaveSuccess?.(payload.length)
     saveKOPredictions(predictionId, payload).then(result => {
       if (!result.ok) { setStatus("error"); setErrorMsg(result.message ?? "Failed to save") }
@@ -220,6 +248,11 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
                 <CheckCircle2 className="w-4 h-4" /> Saved
               </span>
             )}
+            {status === "incomplete" && (
+              <span className="flex items-center gap-1.5 text-amber-400 text-sm">
+                <AlertCircle className="w-4 h-4" /> Saved — incomplete
+              </span>
+            )}
             {status === "error" && (
               <span className="flex items-center gap-1.5 text-[#E61D25] text-sm">
                 <AlertCircle className="w-4 h-4" /> {errorMsg}
@@ -232,6 +265,13 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
         )}
         {locked && <Badge className="bg-[#131D42] border border-[#1E2B6E] text-[#D1D4D1]">Locked</Badge>}
       </div>
+
+      {status === "incomplete" && (
+        <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-600/40 rounded-lg px-4 py-3">
+          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-amber-300 text-sm leading-relaxed">{incompleteMsg}</p>
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <div className="flex-1 h-1.5 bg-[#1E2B6E] rounded-full overflow-hidden">
@@ -323,7 +363,7 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
       })}
 
       <p className="text-[#474A4A] text-xs">
-        R32 teams are derived from your group stage predictions using an assumed bracket structure. Actual pairings are confirmed after the draw.
+        Teams show as TBD until the group stage confirms who they are. Later rounds fill in automatically once you (or the result) decide the match before them.
       </p>
     </div>
   )
