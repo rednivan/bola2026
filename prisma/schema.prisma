@@ -187,6 +187,9 @@ model Prediction {
   // Temporary admin-granted exception: while in the future, group predictions
   // are editable for this prediction regardless of groupLocked/groupStageStart
   groupUnlockUntil DateTime?
+  // Same idea for the KO bracket: while in the future, KO predictions are
+  // editable for this prediction regardless of koLocked/knockoutStageStart
+  koUnlockUntil DateTime?
 
   totalScore    Int   @default(0)
   matchAccuracy Float @default(0)

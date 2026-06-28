@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 import { type Stage } from "@/lib/generated/prisma"
 import { isPast } from "date-fns"
-import { isGroupLocked } from "@/lib/locks"
+import { isGroupLocked, isKOLocked } from "@/lib/locks"
 
 async function getAuthUserId(): Promise<string> {
   const supabase = await createClient()
@@ -180,8 +180,7 @@ export async function saveKOPredictions(
   try {
     const userId = await getAuthUserId()
     const prediction = await getPrediction(predictionId, userId)
-    const now = new Date()
-    if (prediction.koLocked || now < prediction.tournament.groupStageEnd || now >= prediction.tournament.knockoutStageStart) {
+    if (isKOLocked(prediction, prediction.tournament)) {
       return { ok: false, message: "KO predictions are locked" }
     }
 
@@ -235,8 +234,7 @@ export async function saveJokerPick(
 
     const isKOStage = stage !== "GROUP"
     if (isKOStage) {
-      const now = new Date()
-      if (prediction.koLocked || now < prediction.tournament.groupStageEnd || now >= prediction.tournament.knockoutStageStart) {
+      if (isKOLocked(prediction, prediction.tournament)) {
         return { ok: false, message: "KO predictions are locked." }
       }
     } else {
