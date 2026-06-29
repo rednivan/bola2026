@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Trophy, Clock, Calendar, Users, TrendingUp, AlertCircle, ArrowRight, Shield } from "lucide-react"
 import Link from "next/link"
 import { HowToGuide } from "@/components/how-to-guide"
+import { CollapsibleCard } from "@/components/collapsible-card"
 
 async function getDashboardData(userId: string) {
   // Phase 1: tournament ID from cache (~0 ms) — needed to avoid JOIN filters below
@@ -278,14 +279,11 @@ export default async function DashboardPage() {
 
       {/* Group stage results — only once admin has saved final standings / 3rd-place qualifiers */}
       {predictions.length > 0 && (finalizedGroups.length > 0 || thirdPlaceQualifiers.length > 0) && (
-        <Card className="bg-[#0D1333] border-[#1E2B6E]">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-white text-base flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-[#3CAC3B]" />
-              Group Stage Results
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
+        <CollapsibleCard
+          title="Group Stage Results"
+          icon={<Trophy className="w-4 h-4 text-[#3CAC3B]" />}
+          contentClassName="space-y-5"
+        >
             {predictions.map((p) => (
               <div key={p.id} className="space-y-3">
                 {predictions.length > 1 && (
@@ -339,8 +337,7 @@ export default async function DashboardPage() {
                 )}
               </div>
             ))}
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       )}
 
       {/* Stats row */}
