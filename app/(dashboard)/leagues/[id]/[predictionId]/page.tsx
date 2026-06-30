@@ -154,7 +154,6 @@ export default async function MemberPredictionPage({
         savedJokerPicks={Object.fromEntries(jokerPicks.map((j: { stage: string; matchId: string }) => [j.stage, j.matchId]))}
         actualGroupOrders={hasActualStandings ? actualGroupOrdersMap : undefined}
         actualThirdPlaceGroupIds={actualThirdPlaceGroupIds.length === 8 ? actualThirdPlaceGroupIds : undefined}
-        now={now.getTime()}
       />
     </div>
   )

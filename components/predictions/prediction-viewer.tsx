@@ -1,6 +1,6 @@
 "use client"
 
-import { Eye, Lock } from "lucide-react"
+import { Eye } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MatchResultsEditor } from "./match-results-editor"
 import { GroupStageEditor } from "./group-stage-editor"
@@ -29,8 +29,6 @@ type Props = {
   savedJokerPicks?: Record<string, string>
   actualGroupOrders?: Record<string, Team[]>
   actualThirdPlaceGroupIds?: string[]
-  // Server-computed timestamp — used to decide which KO picks have kicked off
-  now: number
 }
 
 const noop = () => {}
@@ -48,24 +46,14 @@ export function PredictionViewer({
   savedJokerPicks = {},
   actualGroupOrders,
   actualThirdPlaceGroupIds,
-  now,
 }: Props) {
   const groupOrders = initGroupOrders(groups, savedStandings)
   const picks = initPicks(matchesByGroup, savedPicksMap, groups)
 
   const koPicks = initKOPicksIterative(koMatches, savedKOPicksMap)
 
-  // Only reveal KO picks for matches that have already kicked off — keeps later
-  // rounds (and whoever is leading) from being copyable before they lock.
-  const revealedKOIds = new Set(koMatches.filter((m) => m.kickoff.getTime() <= now).map((m) => m.id))
-  const visibleKOPicks = Object.fromEntries(
-    Object.entries(koPicks).filter(([id]) => revealedKOIds.has(id))
-  ) as Record<string, KOPick>
-  const visibleKOJokers = Object.fromEntries(
-    Object.entries(savedJokerPicks).filter(([, matchId]) => revealedKOIds.has(matchId))
-  )
   // R32 teams come from the real synced fixture data only — see computeKOBracket.
-  const resolvedKOTeams = computeKOBracket(koMatches, visibleKOPicks)
+  const resolvedKOTeams = computeKOBracket(koMatches, koPicks)
 
   // Prefer the admin-confirmed actual 3rd-place team once known — see prediction-editor.tsx.
   const groupsWithThird = groups.map((g) => ({
@@ -150,23 +138,15 @@ export function PredictionViewer({
         </TabsContent>
 
         <TabsContent value="ko" className="mt-0">
-          <div className="space-y-4">
-            {revealedKOIds.size < koMatches.length && (
-              <p className="flex items-center gap-1.5 text-[#D1D4D1]/60 text-xs">
-                <Lock className="w-3 h-3" />
-                Picks for rounds that haven&apos;t kicked off yet stay hidden.
-              </p>
-            )}
-            <KOBracketEditor
-              predictionId={predictionId}
-              koMatches={koMatches}
-              picks={visibleKOPicks}
-              onPickChange={noop}
-              resolvedTeams={resolvedKOTeams}
-              locked
-              jokerMatchIds={visibleKOJokers}
-            />
-          </div>
+          <KOBracketEditor
+            predictionId={predictionId}
+            koMatches={koMatches}
+            picks={koPicks}
+            onPickChange={noop}
+            resolvedTeams={resolvedKOTeams}
+            locked
+            jokerMatchIds={savedJokerPicks}
+          />
         </TabsContent>
       </Tabs>
     </div>
