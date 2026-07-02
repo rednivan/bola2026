@@ -26,6 +26,7 @@ type Props = {
   savedKOPicksMap: Record<string, SavedKOPick>
   jokerMatchIds?: Record<string, string>
   resolvedTeams: Record<string, { home: Team | null; away: Team | null }>
+  resolvedCascadeTeams?: Record<string, { home: Team | null; away: Team | null }>
 }
 
 function resolveTeam(match: KOMatch, resolved: { home: Team | null; away: Team | null } | undefined, side: "home" | "away"): Team | null {
@@ -34,7 +35,7 @@ function resolveTeam(match: KOMatch, resolved: { home: Team | null; away: Team |
     : (match.awayTeam ?? resolved?.away ?? null)
 }
 
-export function KOResultsView({ koMatches, savedKOPicksMap, jokerMatchIds = {}, resolvedTeams }: Props) {
+export function KOResultsView({ koMatches, savedKOPicksMap, jokerMatchIds = {}, resolvedTeams, resolvedCascadeTeams }: Props) {
   const matchesByStage = STAGE_ORDER.reduce<Record<string, KOMatch[]>>((acc, stage) => {
     acc[stage] = koMatches.filter((m) => m.stage === stage).sort((a, b) => a.kickoff.getTime() - b.kickoff.getTime())
     return acc
@@ -111,17 +112,25 @@ export function KOResultsView({ koMatches, savedKOPicksMap, jokerMatchIds = {}, 
             }>
               {matches.map((match) => {
                 const resolved = resolvedTeams[match.id]
+                const cascade = resolvedCascadeTeams?.[match.id]
                 const homeTeam = resolveTeam(match, resolved, "home")
                 const awayTeam = resolveTeam(match, resolved, "away")
+                // Cascade home/away: what the user predicted would be in each slot
+                const cascadeHome = cascade?.home ?? null
+                const cascadeAway = cascade?.away ?? null
+                const homeEliminated = !!cascadeHome && !!match.homeTeam && match.homeTeam.id !== cascadeHome.id
+                const awayEliminated = !!cascadeAway && !!match.awayTeam && match.awayTeam.id !== cascadeAway.id
                 const pick = savedKOPicksMap[match.id]
                 const hasResult = match.homeScore !== null && match.homeScore !== undefined
                 const isJoker = stageJoker === match.id || stage === "THIRD_PLACE"
 
-                // Determine predicted team
+                // Determine predicted team — check cascade bracket first so eliminated teams resolve
                 let predictedTeam: Team | null = null
                 if (pick?.predictedWinnerId) {
                   if (pick.predictedWinnerId === homeTeam?.id) predictedTeam = homeTeam
                   else if (pick.predictedWinnerId === awayTeam?.id) predictedTeam = awayTeam
+                  else if (pick.predictedWinnerId === cascadeHome?.id) predictedTeam = cascadeHome
+                  else if (pick.predictedWinnerId === cascadeAway?.id) predictedTeam = cascadeAway
                 }
 
                 // Determine actual winner team
@@ -153,11 +162,14 @@ export function KOResultsView({ koMatches, savedKOPicksMap, jokerMatchIds = {}, 
 
                     {/* Teams + score */}
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {homeTeam?.flagUrl && (
-                          <img src={homeTeam.flagUrl} alt={homeTeam.code} className="w-7 h-5 object-cover rounded-sm shrink-0" />
-                        )}
-                        <span className="text-white text-sm font-medium truncate">{homeTeam?.name ?? match.homeTeamPlaceholder ?? "TBD"}</span>
+                      <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {(cascadeHome ?? homeTeam)?.flagUrl && (
+                            <img src={(cascadeHome ?? homeTeam)!.flagUrl} alt={(cascadeHome ?? homeTeam)!.code} className={`w-7 h-5 object-cover rounded-sm shrink-0 ${homeEliminated ? "opacity-50" : ""}`} />
+                          )}
+                          <span className={`text-sm font-medium truncate ${homeEliminated ? "text-[#474A4A]" : "text-white"}`}>{(cascadeHome ?? homeTeam)?.name ?? match.homeTeamPlaceholder ?? "TBD"}</span>
+                        </div>
+                        {homeEliminated && <span className="text-[#E61D25] text-[9px] font-medium uppercase tracking-wide">eliminated</span>}
                       </div>
 
                       <div className="shrink-0 text-center min-w-[60px]">
@@ -173,11 +185,14 @@ export function KOResultsView({ koMatches, savedKOPicksMap, jokerMatchIds = {}, 
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-                        <span className="text-white text-sm font-medium truncate">{awayTeam?.name ?? match.awayTeamPlaceholder ?? "TBD"}</span>
-                        {awayTeam?.flagUrl && (
-                          <img src={awayTeam.flagUrl} alt={awayTeam.code} className="w-7 h-5 object-cover rounded-sm shrink-0" />
-                        )}
+                      <div className="flex flex-col gap-0.5 flex-1 min-w-0 items-end">
+                        <div className="flex items-center gap-2 min-w-0 justify-end">
+                          <span className={`text-sm font-medium truncate ${awayEliminated ? "text-[#474A4A]" : "text-white"}`}>{(cascadeAway ?? awayTeam)?.name ?? match.awayTeamPlaceholder ?? "TBD"}</span>
+                          {(cascadeAway ?? awayTeam)?.flagUrl && (
+                            <img src={(cascadeAway ?? awayTeam)!.flagUrl} alt={(cascadeAway ?? awayTeam)!.code} className={`w-7 h-5 object-cover rounded-sm shrink-0 ${awayEliminated ? "opacity-50" : ""}`} />
+                          )}
+                        </div>
+                        {awayEliminated && <span className="text-[#E61D25] text-[9px] font-medium uppercase tracking-wide">eliminated</span>}
                       </div>
                     </div>
 

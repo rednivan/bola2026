@@ -123,18 +123,25 @@ export function initKOPicksIterative(
 
   for (const stage of STAGES) {
     const bracket = computeKOBracket(koMatches, currentPicks)
+    // Pure-cascade bracket ignores real confirmed DB teams so that picks for
+    // eliminated teams (whose team ID no longer appears in confirmed R16+ lineups)
+    // still resolve to "home"/"away" for display purposes.
+    const cascadeBracket = computeKOBracket(koMatches, currentPicks, { pureCascade: true })
     for (const m of koMatches.filter((m) => m.stage === stage)) {
       const saved = savedMap[m.id]
       if (!saved || saved.predictedWinnerId === null) continue
       const resolved = bracket[m.id]
+      const cascadeResolved = cascadeBracket[m.id]
       if (
         saved.predictedWinnerId === m.homeTeam?.id ||
-        (resolved?.home && saved.predictedWinnerId === resolved.home.id)
+        (resolved?.home && saved.predictedWinnerId === resolved.home.id) ||
+        (cascadeResolved?.home && saved.predictedWinnerId === cascadeResolved.home.id)
       ) {
         currentPicks = { ...currentPicks, [m.id]: "home" }
       } else if (
         saved.predictedWinnerId === m.awayTeam?.id ||
-        (resolved?.away && saved.predictedWinnerId === resolved.away.id)
+        (resolved?.away && saved.predictedWinnerId === resolved.away.id) ||
+        (cascadeResolved?.away && saved.predictedWinnerId === cascadeResolved.away.id)
       ) {
         currentPicks = { ...currentPicks, [m.id]: "away" }
       }
@@ -183,7 +190,8 @@ const THIRD_PLACE_MATCH_NUMBER = 537389
 
 export function computeKOBracket(
   koMatches: KOMatch[],
-  koPicks: Record<string, KOPick>
+  koPicks: Record<string, KOPick>,
+  { pureCascade = false }: { pureCascade?: boolean } = {}
 ): Record<string, { home: Team | null; away: Team | null }> {
   const byMatchNumber = new Map(koMatches.map((m) => [m.matchNumber, m]))
 
@@ -197,7 +205,10 @@ export function computeKOBracket(
   // routinely put the same team into two different slots. Showing TBD until the
   // real fixture is confirmed is correct; a wrong guess is worse than no guess.
   for (const m of koMatches.filter((m) => m.stage === "R32")) {
-    result[m.id] = { home: m.homeTeam ?? null, away: m.awayTeam ?? null }
+    result[m.id] = {
+      home: pureCascade ? null : (m.homeTeam ?? null),
+      away: pureCascade ? null : (m.awayTeam ?? null),
+    }
   }
 
   function winner(matchId: string): Team | null {
@@ -223,8 +234,8 @@ export function computeKOBracket(
         : [null, null]
       const resolve = m.matchNumber === THIRD_PLACE_MATCH_NUMBER ? loser : winner
       result[m.id] = {
-        home: m.homeTeam ?? (matchA ? resolve(matchA.id) : null),
-        away: m.awayTeam ?? (matchB ? resolve(matchB.id) : null),
+        home: (pureCascade ? undefined : m.homeTeam) ?? (matchA ? resolve(matchA.id) : null),
+        away: (pureCascade ? undefined : m.awayTeam) ?? (matchB ? resolve(matchB.id) : null),
       }
     }
   }
@@ -347,6 +358,7 @@ export function PredictionEditor({
   // KO bracket: R32 teams come from the real synced fixture data only (see
   // computeKOBracket) — later rounds cascade from koPicks as before.
   const resolvedKOTeams = computeKOBracket(koMatches, koPicks)
+  const resolvedKOCascadeTeams = computeKOBracket(koMatches, koPicks, { pureCascade: true })
 
   function badge(filled: number, total: number) {
     const done = filled === total
@@ -538,6 +550,7 @@ export function PredictionEditor({
             savedKOPicksMap={savedKOPicksMap}
             jokerMatchIds={savedJokerPicks}
             resolvedTeams={resolvedKOTeams}
+            resolvedCascadeTeams={resolvedKOCascadeTeams}
           />
         ) : (
           <KOBracketEditor
@@ -547,6 +560,7 @@ export function PredictionEditor({
             onPickChange={handleKOPickChange}
             onSaveSuccess={(count) => setSavedKOCount(count)}
             resolvedTeams={resolvedKOTeams}
+            resolvedCascadeTeams={resolvedKOCascadeTeams}
             locked={koLocked}
             jokerMatchIds={savedJokerPicks}
           />

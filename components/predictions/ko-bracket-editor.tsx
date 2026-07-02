@@ -46,38 +46,50 @@ type Props = {
   onSaveSuccess?: (savedCount: number) => void
   // derived team overrides: when DB teams are null, use these bracket-derived teams
   resolvedTeams: Record<string, { home: Team | null; away: Team | null }>
+  // pure-cascade bracket — what the user predicted, ignoring real DB results.
+  // used to show the user's picked team even if that team was eliminated.
+  resolvedCascadeTeams?: Record<string, { home: Team | null; away: Team | null }>
   locked: boolean
   // stage → matchId joker picks
   jokerMatchIds?: Record<string, string>
 }
 
-function TeamSlot({ team, placeholder }: { team: Team | null; placeholder: string | null }) {
+function TeamSlot({ team, placeholder, eliminated = false }: { team: Team | null; placeholder: string | null; eliminated?: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center gap-1">
       {team?.flagUrl ? (
-        <img src={team.flagUrl} alt={team.code} className="w-8 h-6 object-cover rounded-sm" />
+        <img src={team.flagUrl} alt={team.code} className={`w-8 h-6 object-cover rounded-sm ${eliminated ? "opacity-50" : ""}`} />
       ) : (
         <div className="w-8 h-6 bg-[#1E2B6E] rounded-sm flex items-center justify-center">
           <Shield className="w-3.5 h-3.5 text-[#474A4A]" />
         </div>
       )}
-      <span className={`text-xs font-bold text-center leading-tight ${team ? "text-white" : "text-[#474A4A] italic"}`}>
+      <span className={`text-xs font-bold text-center leading-tight ${team ? (eliminated ? "text-[#474A4A]" : "text-white") : "text-[#474A4A] italic"}`}>
         {team ? team.code : (placeholder ?? "TBD")}
       </span>
+      {eliminated && (
+        <span className="text-[#E61D25] text-[9px] font-medium uppercase tracking-wide leading-tight">eliminated</span>
+      )}
     </div>
   )
 }
 
-function KOMatchCard({ match, pick, resolvedHome, resolvedAway, onPick, locked }: {
+function KOMatchCard({ match, pick, resolvedHome, resolvedAway, cascadeHome, cascadeAway, onPick, locked }: {
   match: KOMatch
   pick: KOPick
   resolvedHome: Team | null
   resolvedAway: Team | null
+  cascadeHome: Team | null
+  cascadeAway: Team | null
   onPick: (p: KOPick) => void
   locked: boolean
 }) {
-  const displayHome = match.homeTeam ?? resolvedHome
-  const displayAway = match.awayTeam ?? resolvedAway
+  // Show the user's cascade-predicted team for each slot; if that team was
+  // actually eliminated (real confirmed team differs), mark it as such.
+  const displayHome = cascadeHome ?? match.homeTeam ?? resolvedHome
+  const displayAway = cascadeAway ?? match.awayTeam ?? resolvedAway
+  const homeEliminated = !!cascadeHome && !!match.homeTeam && match.homeTeam.id !== cascadeHome.id
+  const awayEliminated = !!cascadeAway && !!match.awayTeam && match.awayTeam.id !== cascadeAway.id
 
   function handlePick(side: "home" | "away") {
     if (locked) return
@@ -107,6 +119,7 @@ function KOMatchCard({ match, pick, resolvedHome, resolvedAway, onPick, locked }
           <TeamSlot
             team={displayHome}
             placeholder={match.homeTeamPlaceholder}
+            eliminated={homeEliminated}
           />
         </button>
 
@@ -120,6 +133,7 @@ function KOMatchCard({ match, pick, resolvedHome, resolvedAway, onPick, locked }
           <TeamSlot
             team={displayAway}
             placeholder={match.awayTeamPlaceholder}
+            eliminated={awayEliminated}
           />
         </button>
       </div>
@@ -133,7 +147,7 @@ function KOMatchCard({ match, pick, resolvedHome, resolvedAway, onPick, locked }
   )
 }
 
-export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, onSaveSuccess, resolvedTeams, locked, jokerMatchIds = {} }: Props) {
+export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, onSaveSuccess, resolvedTeams, resolvedCascadeTeams, locked, jokerMatchIds = {} }: Props) {
   const [status, setStatus] = useState<"idle" | "saved" | "incomplete" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
   const [incompleteMsg, setIncompleteMsg] = useState("")
@@ -322,6 +336,7 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
             }>
               {matches.map((match) => {
                 const resolved = resolvedTeams[match.id] ?? { home: null, away: null }
+                const cascade = resolvedCascadeTeams?.[match.id] ?? { home: null, away: null }
                 const isJoker = stageJoker === match.id
                 return (
                   <div key={match.id} className="relative">
@@ -330,6 +345,8 @@ export function KOBracketEditor({ predictionId, koMatches, picks, onPickChange, 
                       pick={picks[match.id] ?? null}
                       resolvedHome={resolved.home}
                       resolvedAway={resolved.away}
+                      cascadeHome={cascade.home}
+                      cascadeAway={cascade.away}
                       onPick={(p) => { onPickChange(match.id, p); setStatus("idle") }}
                       locked={locked}
                     />

@@ -54,6 +54,7 @@ export function PredictionViewer({
 
   // R32 teams come from the real synced fixture data only — see computeKOBracket.
   const resolvedKOTeams = computeKOBracket(koMatches, koPicks)
+  const resolvedKOCascadeTeams = computeKOBracket(koMatches, koPicks, { pureCascade: true })
 
   // Prefer the admin-confirmed actual 3rd-place team once known — see prediction-editor.tsx.
   const groupsWithThird = groups.map((g) => ({
@@ -144,6 +145,7 @@ export function PredictionViewer({
             picks={koPicks}
             onPickChange={noop}
             resolvedTeams={resolvedKOTeams}
+            resolvedCascadeTeams={resolvedKOCascadeTeams}
             locked
             jokerMatchIds={savedJokerPicks}
           />
