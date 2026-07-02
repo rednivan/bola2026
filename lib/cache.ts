@@ -122,6 +122,6 @@ export const getCachedKOMatches = unstable_cache(
     },
     orderBy: [{ kickoff: "asc" }, { matchNumber: "asc" }],
   }),
-  ["ko-matches-2026"],
+  ["ko-matches-2026-v2"],
   { revalidate: 300 },
 )

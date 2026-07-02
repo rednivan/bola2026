@@ -205,10 +205,10 @@ export function computeKOBracket(
   // routinely put the same team into two different slots. Showing TBD until the
   // real fixture is confirmed is correct; a wrong guess is worse than no guess.
   for (const m of koMatches.filter((m) => m.stage === "R32")) {
-    result[m.id] = {
-      home: pureCascade ? null : (m.homeTeam ?? null),
-      away: pureCascade ? null : (m.awayTeam ?? null),
-    }
+    // R32 always uses real DB teams — they're the base of the cascade, and
+    // R32 teams are always directly assigned from the API (never themselves
+    // the result of a cascade). pureCascade only affects R16 and beyond.
+    result[m.id] = { home: m.homeTeam ?? null, away: m.awayTeam ?? null }
   }
 
   function winner(matchId: string): Team | null {
