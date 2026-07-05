@@ -177,7 +177,7 @@ const KO_FEEDERS: Record<number, [number, number]> = {
   537380: [537421, 537422], // R16 @ Lumen Field
   537381: [537427, 537428], // R16 @ Mercedes-Benz Stadium
   537382: [537429, 537430], // R16 @ BC Place
-  537383: [537376, 537375], // QF @ Gillette Stadium
+  537383: [537375, 537376], // QF @ Gillette Stadium (confirmed: FRA from 537375 is home, MAR from 537376 is away)
   537384: [537379, 537380], // QF @ SoFi Stadium
   537385: [537377, 537378], // QF @ Hard Rock Stadium
   537386: [537381, 537382], // QF @ Arrowhead Stadium
@@ -233,9 +233,18 @@ export function computeKOBracket(
         ? [byMatchNumber.get(feeders[0]) ?? null, byMatchNumber.get(feeders[1]) ?? null]
         : [null, null]
       const resolve = m.matchNumber === THIRD_PLACE_MATCH_NUMBER ? loser : winner
+      let cascadeHome = matchA ? resolve(matchA.id) : null
+      let cascadeAway = matchB ? resolve(matchB.id) : null
+      // When real confirmed teams are available, align the cascade's home/away slots
+      // to match reality — our feeder table assigns slot order from a venue-based
+      // derivation that may have the home/away sides swapped vs FIFA's actual fixture.
+      if (pureCascade && (m.homeTeam || m.awayTeam)) {
+        if (m.homeTeam && cascadeAway?.id === m.homeTeam.id) [cascadeHome, cascadeAway] = [cascadeAway, cascadeHome]
+        else if (m.awayTeam && cascadeHome?.id === m.awayTeam.id) [cascadeHome, cascadeAway] = [cascadeAway, cascadeHome]
+      }
       result[m.id] = {
-        home: (pureCascade ? undefined : m.homeTeam) ?? (matchA ? resolve(matchA.id) : null),
-        away: (pureCascade ? undefined : m.awayTeam) ?? (matchB ? resolve(matchB.id) : null),
+        home: (pureCascade ? undefined : m.homeTeam) ?? cascadeHome ?? null,
+        away: (pureCascade ? undefined : m.awayTeam) ?? cascadeAway ?? null,
       }
     }
   }
