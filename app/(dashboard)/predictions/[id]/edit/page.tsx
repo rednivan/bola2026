@@ -19,7 +19,9 @@ async function getPredictionData(predictionId: string) {
     getCachedKOMatches(),
   ])
 
-  // User-specific data: 6 queries instead of 8 (no JOIN filters needed)
+  // User-specific data: 6 queries instead of 8 (no JOIN filters needed).
+  // The two groupTeam queries have no tournament filter: each deployment's DB
+  // holds exactly one tournament, so every group already belongs to it.
   const [prediction, groupStandings, allMatchPredictions, thirdPlacePicks, jokerPicks, actualGroupTeams, qualifiedThirdPlaceGroups] =
     await Promise.all([
       prisma.prediction.findUnique({
@@ -33,7 +35,7 @@ async function getPredictionData(predictionId: string) {
       prisma.thirdPlacePrediction.findMany({ where: { predictionId } }),
       prisma.jokerPick.findMany({ where: { predictionId } }),
       prisma.groupTeam.findMany({
-        where: { group: { tournament: { year: 2026 } }, actualPosition: { not: null } },
+        where: { actualPosition: { not: null } },
         select: {
           groupId: true,
           actualPosition: true,
@@ -42,7 +44,7 @@ async function getPredictionData(predictionId: string) {
         orderBy: [{ groupId: "asc" }, { actualPosition: "asc" }],
       }),
       prisma.groupTeam.findMany({
-        where: { group: { tournament: { year: 2026 } }, thirdPlaceQualified: true },
+        where: { thirdPlaceQualified: true },
         select: { groupId: true },
       }),
     ])
@@ -198,6 +200,7 @@ export default async function EditPredictionPage({
         savedPicksMap={savedPicksMap}
         pointsByMatch={pointsByMatch}
         savedThirdPlaceGroupIds={thirdPlacePicks.map((t) => t.groupId)}
+        thirdPlaceQualifiers={prediction.tournament.thirdPlaceQualifiers}
         standingsTotal={groups.length * 4}
         matchTotal={groupMatches.length}
         locked={groupLocked}
@@ -208,7 +211,7 @@ export default async function EditPredictionPage({
         initialTab={(koStageStarted && !koOverrideActive) ? "ko" : isWindow2 ? "ko" : undefined}
         savedJokerPicks={Object.fromEntries(jokerPicks.map((j: { stage: string; matchId: string }) => [j.stage, j.matchId]))}
         actualGroupOrders={hasActualStandings ? actualGroupOrdersMap : undefined}
-        actualThirdPlaceGroupIds={actualThirdPlaceGroupIds.length === 8 ? actualThirdPlaceGroupIds : undefined}
+        actualThirdPlaceGroupIds={actualThirdPlaceGroupIds.length === prediction.tournament.thirdPlaceQualifiers ? actualThirdPlaceGroupIds : undefined}
       />
     </div>
   )

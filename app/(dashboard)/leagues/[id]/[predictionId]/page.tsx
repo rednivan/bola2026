@@ -21,7 +21,7 @@ export default async function MemberPredictionPage({
   const league = await prisma.league.findUnique({
     where: { id },
     include: {
-      tournament: { select: { name: true, year: true, groupStageStart: true } },
+      tournament: { select: { name: true, year: true, groupStageStart: true, thirdPlaceQualifiers: true } },
       memberships: {
         include: {
           prediction: { select: { id: true, name: true, userId: true, totalScore: true } },
@@ -56,7 +56,7 @@ export default async function MemberPredictionPage({
     prisma.thirdPlacePrediction.findMany({ where: { predictionId } }),
     prisma.jokerPick.findMany({ where: { predictionId } }),
     prisma.groupTeam.findMany({
-      where: { group: { tournament: { year: 2026 } }, actualPosition: { not: null } },
+      where: { group: { tournamentId: league.tournamentId }, actualPosition: { not: null } },
       select: {
         groupId: true,
         actualPosition: true,
@@ -65,7 +65,7 @@ export default async function MemberPredictionPage({
       orderBy: [{ groupId: "asc" }, { actualPosition: "asc" }],
     }),
     prisma.groupTeam.findMany({
-      where: { group: { tournament: { year: 2026 } }, thirdPlaceQualified: true },
+      where: { group: { tournamentId: league.tournamentId }, thirdPlaceQualified: true },
       select: { groupId: true },
     }),
   ])
@@ -149,11 +149,12 @@ export default async function MemberPredictionPage({
         savedPicksMap={savedPicksMap}
         pointsByMatch={pointsByMatch}
         savedThirdPlaceGroupIds={thirdPlacePicks.map((t) => t.groupId)}
+        thirdPlaceQualifiers={league.tournament.thirdPlaceQualifiers}
         koMatches={koMatchesHydrated}
         savedKOPicksMap={savedKOPicksMap}
         savedJokerPicks={Object.fromEntries(jokerPicks.map((j: { stage: string; matchId: string }) => [j.stage, j.matchId]))}
         actualGroupOrders={hasActualStandings ? actualGroupOrdersMap : undefined}
-        actualThirdPlaceGroupIds={actualThirdPlaceGroupIds.length === 8 ? actualThirdPlaceGroupIds : undefined}
+        actualThirdPlaceGroupIds={actualThirdPlaceGroupIds.length === league.tournament.thirdPlaceQualifiers ? actualThirdPlaceGroupIds : undefined}
       />
     </div>
   )

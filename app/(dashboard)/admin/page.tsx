@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { findActiveTournament } from "@/lib/tournament"
 import { getCachedTournamentCounts } from "@/lib/cache"
-import { AdminPanels, type MatchRow, type MatchdayStatus, type KOReminderStatus, type TournamentDates, type GroupData, type CronActivity, type UserRow } from "./admin-panels"
+import { AdminPanels, type MatchRow, type MatchdayStatus, type KOReminderStatus, type TournamentDates, type GroupData, type CronActivity, type UserRow, type TeamRow } from "./admin-panels"
 
 export default async function AdminPage() {
   const supabase = await createClient()
@@ -13,12 +14,12 @@ export default async function AdminPage() {
   const dbUser = await prisma.user.findUnique({ where: { id: user.id } })
   if (dbUser?.role !== "ADMIN") redirect("/dashboard")
 
-  const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
+  const tournament = await findActiveTournament()
 
   const todayStart = new Date()
   todayStart.setUTCHours(0, 0, 0, 0)
 
-  const [rawMatches, emailLogs, koReminderLogs, rawGroups, cronLogs, emailsSentToday, rawUsers] = await Promise.all([
+  const [rawMatches, emailLogs, koReminderLogs, rawGroups, cronLogs, emailsSentToday, rawUsers, rawTeams] = await Promise.all([
     tournament
       ? prisma.match.findMany({
           where: { tournamentId: tournament.id },
@@ -102,6 +103,16 @@ export default async function AdminPage() {
           orderBy: { displayName: "asc" },
         })
       : Promise.resolve([]),
+
+    // All synced teams (independent of tournament) — used by the team-to-group
+    // assignment panel, which needs to show unassigned teams too.
+    prisma.team.findMany({
+      select: {
+        id: true, name: true, code: true, confederation: true,
+        groupMemberships: { select: { groupId: true, group: { select: { letter: true } } } },
+      },
+      orderBy: { name: "asc" },
+    }),
   ])
 
   const matches: MatchRow[] = rawMatches.map((m) => ({
@@ -150,7 +161,7 @@ export default async function AdminPage() {
     : 0
 
   const tournamentCounts = tournament ? await getCachedTournamentCounts(tournament.id) : null
-  const groupOnlyTotal = tournamentCounts ? tournamentCounts.matchTotal + tournamentCounts.standingsTotal + 8 : 0
+  const groupOnlyTotal = tournamentCounts && tournament ? tournamentCounts.matchTotal + tournamentCounts.standingsTotal + tournament.thirdPlaceQualifiers : 0
 
   const koReminderStatus: KOReminderStatus = {
     sentCount: koReminderLogs,
@@ -185,6 +196,15 @@ export default async function AdminPage() {
     emailsSentToday,
   }
 
+  const teams: TeamRow[] = rawTeams.map((t) => ({
+    id: t.id,
+    name: t.name,
+    code: t.code,
+    confederation: t.confederation,
+    groupId: t.groupMemberships[0]?.groupId ?? null,
+    groupLetter: t.groupMemberships[0]?.group.letter ?? null,
+  }))
+
   const users: UserRow[] = rawUsers.map((u) => ({
     id: u.id,
     displayName: u.displayName,
@@ -204,11 +224,13 @@ export default async function AdminPage() {
 
   return (
     <AdminPanels
+      tournamentExists={!!tournament}
       matches={matches}
       matchdays={matchdays}
       koReminderStatus={koReminderStatus}
       tournamentDates={tournamentDates}
       groups={groups}
+      teams={teams}
       cronActivity={cronActivity}
       users={users}
     />

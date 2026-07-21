@@ -1,14 +1,14 @@
 import { transporter, FROM } from "@/lib/mailer"
 import { prisma } from "@/lib/prisma"
+import { findActiveTournament } from "@/lib/tournament"
 import { unsubscribeUrl } from "./unsubscribe"
 
-// World Cup 2026 runs entirely within US Eastern Daylight Time (UTC-4, DST until
-// early November) — "matchday" boundaries use the Eastern calendar date instead
-// of UTC, so late-evening US kickoffs group with same-day matches.
-const US_TZ_OFFSET_MS = 4 * 60 * 60 * 1000
-
-export function matchdayDateString(kickoff: Date): string {
-  return new Date(kickoff.getTime() - US_TZ_OFFSET_MS).toISOString().slice(0, 10)
+// "Matchday" boundaries use the tournament's local calendar date instead of UTC,
+// so late-evening kickoffs group with same-day matches rather than rolling into
+// the next day. Offset comes from Tournament.matchdayTzOffsetHours (e.g. World
+// Cup 2026 in US Eastern DST = -4; Euros in Central European Summer Time = +2).
+export function matchdayDateString(kickoff: Date, tzOffsetHours: number): string {
+  return new Date(kickoff.getTime() + tzOffsetHours * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
 // ─── HTML helpers ────────────────────────────────────────────────────────────
@@ -380,7 +380,7 @@ export async function sendMatchdayEmail(
 
 // Legacy helper kept for scripts/send-test-email.ts compatibility
 export async function sendDailyResults(to: string, userId?: string) {
-  const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
+  const tournament = await findActiveTournament()
   if (!tournament) throw new Error("Tournament not found")
   const today = new Date().toISOString().slice(0, 10)
   return sendMatchdayEmail(to, userId ?? "", today, tournament.id)

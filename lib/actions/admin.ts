@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { type Stage } from "@/lib/generated/prisma"
+import { findActiveTournament } from "@/lib/tournament"
 import { syncTeamsFromApi, syncMatchesFromApi } from "@/lib/sync"
 import { recalculateAllScores } from "@/lib/scoring"
 import { sendMatchdayEmail } from "@/lib/emails/daily-results"
@@ -44,6 +46,92 @@ export async function syncAll(): Promise<{ ok: boolean; message: string }> {
     await requireAdmin()
     const [teams, matches] = await Promise.all([syncTeamsFromApi(), syncMatchesFromApi()])
     return { ok: true, message: `${teams} · ${matches}` }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
+}
+
+// ─── Tournament setup ──────────────────────────────────────────────────────────
+
+export type NewTournamentInput = {
+  name: string
+  year: number
+  host: string
+  apiCompetitionCode: string
+  totalTeams: number
+  totalGroups: number
+  thirdPlaceQualifiers: number
+  koBaseStage: Stage
+  matchdayTzOffsetHours: number
+  groupStageStart: string
+  groupStageEnd: string
+  knockoutStageStart: string
+}
+
+// Creates the one Tournament row for this deployment plus its groups (A, B, C...).
+// Each deployment's DB holds exactly one tournament (see lib/tournament.ts), so
+// this is a one-time step done right after a fresh deploy instead of hand-editing
+// prisma/seed.ts and running it.
+export async function createTournament(
+  input: NewTournamentInput
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    await requireAdmin()
+
+    const existing = await prisma.tournament.findFirst()
+    if (existing) return { ok: false, message: `A tournament already exists (${existing.name}). Delete it in the database first if you need to start over.` }
+
+    if (input.totalGroups < 1 || input.totalGroups > 26) {
+      return { ok: false, message: "Total groups must be between 1 and 26." }
+    }
+
+    const tournament = await prisma.tournament.create({
+      data: {
+        name: input.name,
+        year: input.year,
+        host: input.host,
+        apiCompetitionCode: input.apiCompetitionCode,
+        totalTeams: input.totalTeams,
+        totalGroups: input.totalGroups,
+        thirdPlaceQualifiers: input.thirdPlaceQualifiers,
+        koBaseStage: input.koBaseStage,
+        matchdayTzOffsetHours: input.matchdayTzOffsetHours,
+        groupStageStart: new Date(input.groupStageStart),
+        groupStageEnd: new Date(input.groupStageEnd),
+        knockoutStageStart: new Date(input.knockoutStageStart),
+      },
+    })
+
+    const letters = Array.from({ length: input.totalGroups }, (_, i) => String.fromCharCode(65 + i))
+    await prisma.tournamentGroup.createMany({
+      data: letters.map((letter) => ({ tournamentId: tournament.id, letter })),
+    })
+
+    revalidatePath("/admin")
+    return { ok: true, message: `Created "${tournament.name}" with ${letters.length} groups (${letters[0]}–${letters[letters.length - 1]}). Next: Sync Teams, then assign each team to a group.` }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
+}
+
+// Moves each team into the given group (or removes it from any group if groupId is
+// null). Re-assigning deletes any prior GroupTeam row first since a team can only
+// belong to one group at a time.
+export async function assignTeamsToGroups(
+  assignments: { teamId: string; groupId: string | null }[]
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    await requireAdmin()
+
+    for (const a of assignments) {
+      await prisma.groupTeam.deleteMany({ where: { teamId: a.teamId } })
+      if (a.groupId) {
+        await prisma.groupTeam.create({ data: { groupId: a.groupId, teamId: a.teamId } })
+      }
+    }
+
+    revalidatePath("/admin")
+    return { ok: true, message: `Updated ${assignments.length} team assignment${assignments.length === 1 ? "" : "s"}.` }
   } catch (e) {
     return { ok: false, message: (e as Error).message }
   }
@@ -140,7 +228,7 @@ export async function triggerMatchdayEmails(
   try {
     await requireAdmin()
 
-    const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
+    const tournament = await findActiveTournament()
     if (!tournament) return { ok: false, message: "Tournament not found." }
 
     if (force) {
@@ -197,11 +285,11 @@ export async function updateTournamentDates(
 ): Promise<{ ok: boolean; message: string }> {
   try {
     await requireAdmin()
-    const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
+    const tournament = await findActiveTournament()
     if (!tournament) return { ok: false, message: "Tournament not found." }
 
     await prisma.tournament.update({
-      where: { year: 2026 },
+      where: { id: tournament.id },
       data: {
         groupStageStart: new Date(groupStageStart),
         groupStageEnd: new Date(groupStageEnd),
@@ -273,8 +361,11 @@ export async function saveThirdPlaceQualifiers(
   try {
     await requireAdmin()
 
-    if (qualifiedGroupIds.length !== 8) {
-      return { ok: false, message: `Select exactly 8 groups (got ${qualifiedGroupIds.length}).` }
+    const tournament = await findActiveTournament()
+    if (!tournament) return { ok: false, message: "Tournament not found." }
+
+    if (qualifiedGroupIds.length !== tournament.thirdPlaceQualifiers) {
+      return { ok: false, message: `Select exactly ${tournament.thirdPlaceQualifiers} groups (got ${qualifiedGroupIds.length}).` }
     }
 
     // Reset all
@@ -331,7 +422,7 @@ export async function getTournamentDates(): Promise<{
   groupStageEnd: string
   knockoutStageStart: string
 } | null> {
-  const t = await prisma.tournament.findUnique({ where: { year: 2026 } })
+  const t = await findActiveTournament()
   if (!t) return null
   return {
     groupStageStart: t.groupStageStart.toISOString().slice(0, 16),
@@ -351,7 +442,7 @@ export async function sendKOReminder(
   try {
     await requireAdmin()
 
-    const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
+    const tournament = await findActiveTournament()
     if (!tournament) return { ok: false, message: "Tournament not found." }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bola.wathan.my"

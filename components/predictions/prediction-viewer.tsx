@@ -24,6 +24,7 @@ type Props = {
   savedPicksMap: Record<string, { predictedWinnerId: string | null; isDraw: boolean }>
   pointsByMatch?: Record<string, number>
   savedThirdPlaceGroupIds: string[]
+  thirdPlaceQualifiers: number
   koMatches: KOMatch[]
   savedKOPicksMap: Record<string, { predictedWinnerId: string | null; pointsEarned: number }>
   savedJokerPicks?: Record<string, string>
@@ -41,6 +42,7 @@ export function PredictionViewer({
   savedPicksMap,
   pointsByMatch = {},
   savedThirdPlaceGroupIds,
+  thirdPlaceQualifiers,
   koMatches,
   savedKOPicksMap,
   savedJokerPicks = {},
@@ -133,6 +135,7 @@ export function PredictionViewer({
             predictionId={predictionId}
             groups={groupsWithThird}
             savedGroupIds={savedThirdPlaceGroupIds}
+            maxPicks={thirdPlaceQualifiers}
             locked
             actualQualifiedGroupIds={actualThirdPlaceGroupIds}
           />

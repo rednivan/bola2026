@@ -93,13 +93,13 @@ async function getDashboardData(userId: string) {
     .map(([groupId, rows]) => ({ groupId, letter: rows[0].group.letter, teams: rows.map((r) => r.team) }))
     .sort((a, b) => a.letter.localeCompare(b.letter))
 
-  // Admin-confirmed final 3rd-place qualifiers — only meaningful once exactly 8 are saved
+  // Admin-confirmed final 3rd-place qualifiers — only meaningful once the full count is saved
   const qualifiedThirdPlaceRows = await prisma.groupTeam.findMany({
     where: { group: { tournamentId: tournament.id }, thirdPlaceQualified: true },
     select: { groupId: true, team: { select: { id: true, name: true, code: true, flagUrl: true } }, group: { select: { letter: true } } },
     orderBy: { group: { letter: "asc" } },
   })
-  const thirdPlaceQualifiers = qualifiedThirdPlaceRows.length === 8
+  const thirdPlaceQualifiers = qualifiedThirdPlaceRows.length === tournament.thirdPlaceQualifiers
     ? qualifiedThirdPlaceRows.map((r) => ({ groupId: r.groupId, letter: r.group.letter, team: r.team }))
     : []
 
@@ -322,7 +322,7 @@ export default async function DashboardPage() {
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-[#D1D4D1]/60 text-xs font-medium">3rd-Place Qualifiers</span>
                       <span className={`text-xs font-bold tabular-nums ${(thirdPlacePointsByPrediction[p.id] ?? 0) > 0 ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
-                        {thirdPlacePointsByPrediction[p.id] ?? 0}/8
+                        {thirdPlacePointsByPrediction[p.id] ?? 0}/{tournament?.thirdPlaceQualifiers ?? 8}
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">

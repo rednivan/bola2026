@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { findActiveTournament } from "@/lib/tournament"
 import { BrowseLeagues } from "./browse-leagues"
 
 export default async function BrowseLeaguesPage() {
@@ -9,7 +10,7 @@ export default async function BrowseLeaguesPage() {
   if (!session) redirect("/login")
   const user = session.user
 
-  const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
+  const tournament = await findActiveTournament()
 
   const [publicLeagues, userPredictions] = await Promise.all([
     tournament

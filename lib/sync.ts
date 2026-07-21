@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/prisma"
+import { findActiveTournament } from "@/lib/tournament"
 import { Confederation, Prisma, Stage } from "@/lib/generated/prisma"
 
 const API_BASE = process.env.FOOTBALL_DATA_BASE_URL!
 const API_KEY = process.env.FOOTBALL_DATA_API_KEY!
-const WC_CODE = "WC"
 
-// Static mapping from team TLA to confederation (2026 WC qualified teams)
+// Static mapping from team TLA to confederation (2026 WC qualified teams).
+// Teams not listed here (e.g. Euro-only nations) fall back to UEFA, which is
+// correct for a single-confederation tournament like the Euros.
 const TLA_CONFEDERATION: Record<string, Confederation> = {
   GER: "UEFA", ESP: "UEFA", FRA: "UEFA", ENG: "UEFA", BEL: "UEFA",
   CRO: "UEFA", CZE: "UEFA", AUT: "UEFA", NED: "UEFA", NOR: "UEFA",
@@ -58,10 +60,10 @@ async function fdFetch(path: string) {
 }
 
 export async function syncTeamsFromApi(): Promise<string> {
-  const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
-  if (!tournament) throw new Error("Tournament not found — run seed first")
+  const tournament = await findActiveTournament()
+  if (!tournament) throw new Error("Tournament not found — create one from Admin → Tournament Setup")
 
-  const { teams } = await fdFetch(`/competitions/${WC_CODE}/teams`)
+  const { teams } = await fdFetch(`/competitions/${tournament.apiCompetitionCode}/teams`)
 
   await batch(
     teams.map((t: { tla: string; name: string; crest?: string }) => {
@@ -77,10 +79,10 @@ export async function syncTeamsFromApi(): Promise<string> {
 }
 
 export async function syncMatchesFromApi(): Promise<string> {
-  const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
-  if (!tournament) throw new Error("Tournament not found — run seed first")
+  const tournament = await findActiveTournament()
+  if (!tournament) throw new Error("Tournament not found — create one from Admin → Tournament Setup")
 
-  const { matches } = await fdFetch(`/competitions/${WC_CODE}/matches`)
+  const { matches } = await fdFetch(`/competitions/${tournament.apiCompetitionCode}/matches`)
   const groups = await prisma.tournamentGroup.findMany({ where: { tournamentId: tournament.id } })
   const groupByLetter = Object.fromEntries(groups.map((g: { letter: string; id: string }) => [g.letter, g]))
 

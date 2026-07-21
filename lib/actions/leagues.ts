@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { findActiveTournament } from "@/lib/tournament"
 import { z } from "zod"
 
 async function getAuthUserId(): Promise<string> {
@@ -41,14 +42,14 @@ export async function createLeague(
     })
     if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors }
 
+    const tournament = await findActiveTournament()
+    if (!tournament) return { error: "Tournament not found." }
+
     const predictionId = formData.get("predictionId") as string
     const prediction = await prisma.prediction.findFirst({
-      where: { id: predictionId || undefined, userId, tournament: { year: 2026 } },
+      where: { id: predictionId || undefined, userId, tournamentId: tournament.id },
     })
     if (!prediction) return { error: "Select a prediction before creating a league." }
-
-    const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
-    if (!tournament) return { error: "Tournament not found." }
 
     // Generate a unique join code
     let joinCode = randomCode()
@@ -110,9 +111,12 @@ export async function joinLeague(
     })
     if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors }
 
+    const tournament = await findActiveTournament()
+    if (!tournament) return { error: "Tournament not found." }
+
     const predictionId = formData.get("predictionId") as string
     const prediction = await prisma.prediction.findFirst({
-      where: { id: predictionId || undefined, userId, tournament: { year: 2026 } },
+      where: { id: predictionId || undefined, userId, tournamentId: tournament.id },
     })
     if (!prediction) return { error: "Select a prediction to join with." }
 

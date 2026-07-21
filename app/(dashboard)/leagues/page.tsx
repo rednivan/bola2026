@@ -48,7 +48,7 @@ async function getLeaguesData(userId: string) {
     return rankA - rankB
   })
 
-  const groupOnlyTotal = counts.matchTotal + counts.standingsTotal + 8
+  const groupOnlyTotal = counts.matchTotal + counts.standingsTotal + tournament.thirdPlaceQualifiers
   const completedPredictions = predictions.filter((p) => {
     if (p.status === "COMPLETE" || p.status === "GROUP_COMPLETE") return true
     const saved = p._count.matchPredictions + p._count.standingPredictions + p._count.thirdPlacePredictions

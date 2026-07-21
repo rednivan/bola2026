@@ -6,6 +6,7 @@ import {
   updateMatchScore, recalculateScores, triggerMatchdayEmails, sendKOReminder,
   updateTournamentDates, saveGroupStandings, calculateGroupStandingPoints,
   saveThirdPlaceQualifiers, calculateThirdPlacePoints,
+  createTournament, assignTeamsToGroups, type NewTournamentInput,
 } from "@/lib/actions/admin"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import {
   RefreshCw, Users, Calendar, Zap, CheckCircle2, XCircle,
   PenLine, BarChart2, Mail, Send, Bell, CalendarDays, List, Star,
-  Activity, AlertTriangle, Clock, Minus,
+  Activity, AlertTriangle, Clock, Minus, Flag,
 } from "lucide-react"
 import { HowToGuide } from "@/components/how-to-guide"
 
@@ -92,6 +93,213 @@ export type GroupData = {
 export type CronActivity = {
   logs: { job: string; ok: boolean; message: string; createdAt: Date }[]
   emailsSentToday: number
+}
+
+export type TeamRow = {
+  id: string
+  name: string
+  code: string
+  confederation: string
+  groupId: string | null
+  groupLetter: string | null
+}
+
+// ─── Panel -2: Tournament Setup (create the one Tournament row + its groups) ──
+
+const NEW_TOURNAMENT_DEFAULTS: NewTournamentInput = {
+  name: "",
+  year: new Date().getFullYear(),
+  host: "",
+  apiCompetitionCode: "WC",
+  totalTeams: 48,
+  totalGroups: 12,
+  thirdPlaceQualifiers: 8,
+  koBaseStage: "R32",
+  matchdayTzOffsetHours: -4,
+  groupStageStart: "",
+  groupStageEnd: "",
+  knockoutStageStart: "",
+}
+
+function TournamentSetupPanel({ exists }: { exists: boolean }) {
+  const [isPending, startTransition] = useTransition()
+  const [result, setResult] = useState<Result>(null)
+  const [vals, setVals] = useState<NewTournamentInput>(NEW_TOURNAMENT_DEFAULTS)
+
+  if (exists) {
+    return (
+      <section className="space-y-4">
+        <h2 className="text-white font-semibold text-lg flex items-center gap-2">
+          <Flag className="w-4 h-4 text-[#3CAC3B]" />
+          Tournament Setup
+        </h2>
+        <Card className="bg-[#0D1333] border-[#1E2B6E]">
+          <CardContent className="py-4">
+            <p className="text-[#D1D4D1]/60 text-sm">
+              Tournament already configured for this deployment. Dates can be changed below;
+              other settings (competition code, group count, etc.) live on the Tournament
+              row in the database.
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+    )
+  }
+
+  function field<K extends keyof NewTournamentInput>(key: K, label: string, type: string = "text") {
+    return (
+      <div className="space-y-1.5">
+        <Label className="text-[#D1D4D1] text-sm">{label}</Label>
+        <Input
+          type={type}
+          value={vals[key] as string | number}
+          onChange={(e) => setVals((v) => ({
+            ...v,
+            [key]: type === "number" ? Number(e.target.value) : e.target.value,
+          }))}
+          className="bg-[#1A2560] border-[#1E2B6E] text-white"
+        />
+      </div>
+    )
+  }
+
+  function save() {
+    startTransition(async () => {
+      setResult(null)
+      const r = await createTournament(vals)
+      setResult(r)
+    })
+  }
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-white font-semibold text-lg flex items-center gap-2">
+        <Flag className="w-4 h-4 text-[#E61D25]" />
+        Tournament Setup
+      </h2>
+      <Card className="bg-[#0D1333] border-[#1E2B6E]">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-white text-base">Create this deployment&apos;s tournament</CardTitle>
+          <CardDescription className="text-[#D1D4D1]/60">
+            One-time step for a fresh deploy — replaces hand-editing prisma/seed.ts. Creates the
+            Tournament row and its groups (A, B, C…). After saving, use Data Sync to import teams
+            and matches, then assign teams to groups below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {field("name", "Tournament name")}
+            {field("year", "Year", "number")}
+            {field("host", "Host country/countries")}
+            {field("apiCompetitionCode", "football-data.org code (WC, EC…)")}
+            {field("totalTeams", "Total teams", "number")}
+            {field("totalGroups", "Total groups", "number")}
+            {field("thirdPlaceQualifiers", "3rd-place teams that advance", "number")}
+            <div className="space-y-1.5">
+              <Label className="text-[#D1D4D1] text-sm">First knockout round from real fixtures</Label>
+              <select
+                value={vals.koBaseStage}
+                onChange={(e) => setVals((v) => ({ ...v, koBaseStage: e.target.value as NewTournamentInput["koBaseStage"] }))}
+                className="w-full h-9 rounded-md bg-[#1A2560] border border-[#1E2B6E] text-white text-sm px-3"
+              >
+                <option value="R32">Round of 32 (48-team format)</option>
+                <option value="R16">Round of 16 (24/32-team format)</option>
+              </select>
+            </div>
+            {field("matchdayTzOffsetHours", "Matchday email timezone offset (hours from UTC)", "number")}
+          </div>
+
+          <p className="text-[#D1D4D1]/60 text-xs">Dates below are in UTC.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {field("groupStageStart", "Group stage starts", "datetime-local")}
+            {field("groupStageEnd", "Group stage ends", "datetime-local")}
+            {field("knockoutStageStart", "Knockout stage starts", "datetime-local")}
+          </div>
+
+          <ResultAlert result={result} />
+          <Button
+            onClick={save}
+            disabled={isPending || !vals.name || !vals.host || !vals.groupStageStart || !vals.groupStageEnd || !vals.knockoutStageStart}
+            size="sm"
+            className="bg-[#E61D25] hover:bg-[#CC1920] text-white font-semibold"
+          >
+            {isPending ? "Creating…" : "Create tournament"}
+          </Button>
+        </CardContent>
+      </Card>
+    </section>
+  )
+}
+
+// ─── Panel -1: Team → Group assignment ────────────────────────────────────────
+
+function TeamAssignmentPanel({ teams, groups }: { teams: TeamRow[]; groups: GroupData[] }) {
+  const [isPending, startTransition] = useTransition()
+  const [result, setResult] = useState<Result>(null)
+  const [assignments, setAssignments] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(teams.map((t) => [t.id, t.groupId]))
+  )
+
+  if (teams.length === 0 || groups.length === 0) return null
+
+  const assignedCount = Object.values(assignments).filter(Boolean).length
+
+  function save() {
+    startTransition(async () => {
+      setResult(null)
+      const r = await assignTeamsToGroups(
+        teams.map((t) => ({ teamId: t.id, groupId: assignments[t.id] ?? null }))
+      )
+      setResult(r)
+    })
+  }
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-white font-semibold text-lg flex items-center gap-2">
+        <Users className="w-4 h-4 text-[#3CAC3B]" />
+        Team → Group Assignment
+        <Badge className="bg-[#131D42] border border-[#1E2B6E] text-[#D1D4D1]">
+          {assignedCount}/{teams.length} assigned
+        </Badge>
+      </h2>
+      <Card className="bg-[#0D1333] border-[#1E2B6E]">
+        <CardContent className="py-4 space-y-3">
+          <p className="text-[#D1D4D1]/60 text-sm">
+            Sync teams first, then place each one into a group. Needed once per tournament —
+            group-stage matches and standings can&apos;t be scored until every team has a group.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[420px] overflow-y-auto pr-1">
+            {teams.map((t) => (
+              <div key={t.id} className="flex items-center gap-2 bg-[#131D42] border border-[#1E2B6E] rounded-lg px-3 py-2">
+                <span className="text-white text-sm flex-1 truncate">{t.name}</span>
+                <span className="text-[#474A4A] text-xs shrink-0">{t.code}</span>
+                <select
+                  value={assignments[t.id] ?? ""}
+                  onChange={(e) => setAssignments((a) => ({ ...a, [t.id]: e.target.value || null }))}
+                  className="h-8 rounded-md bg-[#1A2560] border border-[#1E2B6E] text-white text-xs px-2 shrink-0"
+                >
+                  <option value="">Unassigned</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>Group {g.letter}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <ResultAlert result={result} />
+          <Button
+            onClick={save}
+            disabled={isPending}
+            size="sm"
+            className="bg-[#3CAC3B] hover:bg-[#2d9430] text-white font-semibold"
+          >
+            {isPending ? "Saving…" : "Save assignments"}
+          </Button>
+        </CardContent>
+      </Card>
+    </section>
+  )
 }
 
 // ─── Panel 0: Cron Activity ───────────────────────────────────────────────────
@@ -1045,19 +1253,23 @@ function UsersPanel({ users }: { users: UserRow[] }) {
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export function AdminPanels({
+  tournamentExists,
   matches,
   matchdays,
   koReminderStatus,
   tournamentDates,
   groups,
+  teams,
   cronActivity,
   users,
 }: {
+  tournamentExists: boolean
   matches: MatchRow[]
   matchdays: MatchdayStatus[]
   koReminderStatus: KOReminderStatus
   tournamentDates: TournamentDates | null
   groups: GroupData[]
+  teams: TeamRow[]
   cronActivity: CronActivity
   users: UserRow[]
 }) {
@@ -1070,6 +1282,9 @@ export function AdminPanels({
         </div>
         <HowToGuide variant="admin" />
       </div>
+
+      <TournamentSetupPanel exists={tournamentExists} />
+      {tournamentExists && <TeamAssignmentPanel teams={teams} groups={groups} />}
 
       <CronActivityPanel activity={cronActivity} />
       <SyncAndRecalculatePanel />

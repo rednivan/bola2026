@@ -1,10 +1,12 @@
 import { unstable_cache } from "next/cache"
 import { prisma } from "@/lib/prisma"
 
-// Tournament record — shared across all users, changes only when admin edits dates
+// Tournament record — shared across all users, changes only when admin edits dates.
+// Each deployment has exactly one tournament (see lib/tournament.ts), so the
+// most-recent-year row is always the active one.
 export const getCachedTournament = unstable_cache(
-  () => prisma.tournament.findUnique({ where: { year: 2026 } }),
-  ["tournament-2026"],
+  () => prisma.tournament.findFirst({ orderBy: { year: "desc" } }),
+  ["tournament-active"],
   { revalidate: 3600 },
 )
 
@@ -24,23 +26,23 @@ export const getCachedTournamentCounts = unstable_cache(
   { revalidate: 86400 },
 )
 
-// Groups with teams — static tournament structure, safe to cache for 24 h
+// Groups with teams — static tournament structure, safe to cache for 24 h.
+// No tournament filter needed: each deployment's DB holds exactly one tournament.
 export const getCachedGroups = unstable_cache(
   () => prisma.tournamentGroup.findMany({
-    where: { tournament: { year: 2026 } },
     include: {
       teams: { include: { team: { select: { id: true, name: true, code: true, flagUrl: true } } } },
     },
     orderBy: { letter: "asc" },
   }),
-  ["groups-2026"],
+  ["groups-active"],
   { revalidate: 86400 },
 )
 
 // Group-stage matches — structure is fixed; scores not selected so 24 h is safe
 export const getCachedGroupMatches = unstable_cache(
   () => prisma.match.findMany({
-    where: { tournament: { year: 2026 }, stage: "GROUP" },
+    where: { stage: "GROUP" },
     select: {
       id: true,
       groupId: true,
@@ -54,7 +56,7 @@ export const getCachedGroupMatches = unstable_cache(
     },
     orderBy: [{ group: { letter: "asc" } }, { kickoff: "asc" }],
   }),
-  ["group-matches-2026-v3"],
+  ["group-matches-active-v3"],
   { revalidate: 86400 },
 )
 
@@ -105,7 +107,7 @@ export const getCachedRecentMatches = unstable_cache(
 // so revalidate every 5 minutes to keep results fresh without hammering the DB
 export const getCachedKOMatches = unstable_cache(
   () => prisma.match.findMany({
-    where: { tournament: { year: 2026 }, stage: { in: ["R32", "R16", "QF", "SF", "THIRD_PLACE", "FINAL"] } },
+    where: { stage: { in: ["R32", "R16", "QF", "SF", "THIRD_PLACE", "FINAL"] } },
     select: {
       id: true,
       stage: true,
@@ -122,6 +124,6 @@ export const getCachedKOMatches = unstable_cache(
     },
     orderBy: [{ kickoff: "asc" }, { matchNumber: "asc" }],
   }),
-  ["ko-matches-2026-v2"],
+  ["ko-matches-active-v2"],
   { revalidate: 300 },
 )

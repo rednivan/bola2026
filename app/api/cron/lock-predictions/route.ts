@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { findActiveTournament } from "@/lib/tournament"
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
@@ -8,7 +9,7 @@ export async function GET(request: Request) {
   }
 
   const now = new Date()
-  const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
+  const tournament = await findActiveTournament()
   if (!tournament) return NextResponse.json({ ok: true, message: "No tournament found" })
 
   let groupLocked = 0

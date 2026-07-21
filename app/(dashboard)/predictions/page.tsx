@@ -10,7 +10,7 @@ import { Trophy, PlusCircle, ChevronRight, CheckCircle2, Circle, Lock } from "lu
 
 async function getPredictionsData(userId: string) {
   const tournament = await getCachedTournament()
-  if (!tournament) return { predictions: [], matchTotal: 0, standingsTotal: 0, koTotal: 0, groupCount: 0, koLocked: true }
+  if (!tournament) return { predictions: [], matchTotal: 0, standingsTotal: 0, koTotal: 0, groupCount: 0, koLocked: true, thirdPlaceQualifiers: 8 }
 
   const now = new Date()
   const groupStageEnded = now >= tournament.groupStageEnd
@@ -39,7 +39,7 @@ async function getPredictionsData(userId: string) {
     getCachedTournamentCounts(tournament.id),
   ])
 
-  return { predictions, ...counts, koLocked }
+  return { predictions, ...counts, koLocked, thirdPlaceQualifiers: tournament.thirdPlaceQualifiers }
 }
 
 export default async function PredictionsPage() {
@@ -48,8 +48,8 @@ export default async function PredictionsPage() {
   if (!session) redirect("/login")
   const user = session.user
 
-  const { predictions, matchTotal, standingsTotal, koTotal, koLocked } = await getPredictionsData(user.id)
-  const groupOnlyTotal = matchTotal + standingsTotal + 8
+  const { predictions, matchTotal, standingsTotal, koTotal, koLocked, thirdPlaceQualifiers } = await getPredictionsData(user.id)
+  const groupOnlyTotal = matchTotal + standingsTotal + thirdPlaceQualifiers
   const effectiveTotal = koLocked ? groupOnlyTotal : groupOnlyTotal + koTotal
 
   return (
@@ -135,7 +135,7 @@ export default async function PredictionsPage() {
                       {[
                         { label: "Match Results", done: p._count.matchPredictions >= matchTotal, locked: false },
                         { label: "Standings", done: p._count.standingPredictions >= standingsTotal, locked: false },
-                        { label: "Third Place", done: p._count.thirdPlacePredictions >= 8, locked: false },
+                        { label: "Third Place", done: p._count.thirdPlacePredictions >= thirdPlaceQualifiers, locked: false },
                         { label: "KO Bracket", done: isComplete, locked: koLocked },
                       ].map(({ label, done, locked }) => (
                         <div key={label} className="flex items-center gap-1.5">

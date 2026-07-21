@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
+import { findActiveTournament } from "@/lib/tournament"
 import { type Stage } from "@/lib/generated/prisma"
 import { isPast } from "date-fns"
 import { isGroupLocked, isKOLocked } from "@/lib/locks"
@@ -57,7 +58,7 @@ export async function createPrediction(
   const userId = await getAuthUserId()
   const name = (formData.get("name") as string)?.trim() || "My Prediction"
 
-  const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
+  const tournament = await findActiveTournament()
   if (!tournament) return { error: "Tournament not found — contact an admin." }
 
   if (isPast(tournament.groupStageStart)) {
@@ -122,7 +123,8 @@ export async function saveThirdPlacePicks(
     if (isGroupLocked(prediction, prediction.tournament)) {
       return { ok: false, message: "Group predictions are locked" }
     }
-    if (groupIds.length !== 8) return { ok: false, message: "Select exactly 8 groups" }
+    const required = prediction.tournament.thirdPlaceQualifiers
+    if (groupIds.length !== required) return { ok: false, message: `Select exactly ${required} groups` }
 
     await prisma.$transaction([
       prisma.thirdPlacePrediction.deleteMany({ where: { predictionId } }),

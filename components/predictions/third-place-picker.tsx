@@ -16,21 +16,21 @@ type Props = {
   predictionId: string
   groups: Group[]
   savedGroupIds: string[]
+  // How many groups' 3rd-place teams advance (World Cup 2026: 8 of 12; Euro: 4 of 6)
+  maxPicks: number
   locked: boolean
   onSelectionChange?: (groupIds: string[]) => void
   onSaveSuccess?: () => void
-  // Admin-confirmed final 8 qualifying groups. Undefined/incomplete means not finalized yet.
+  // Admin-confirmed final qualifying groups. Undefined/incomplete means not finalized yet.
   actualQualifiedGroupIds?: string[]
 }
 
-const MAX_PICKS = 8
-
-export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, onSelectionChange, onSaveSuccess, actualQualifiedGroupIds }: Props) {
+export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, maxPicks, locked, onSelectionChange, onSaveSuccess, actualQualifiedGroupIds }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set(savedGroupIds))
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
 
-  const isFinalized = locked && !!actualQualifiedGroupIds && actualQualifiedGroupIds.length === 8
+  const isFinalized = locked && !!actualQualifiedGroupIds && actualQualifiedGroupIds.length === maxPicks
   const actualSet = new Set(actualQualifiedGroupIds ?? [])
   const correctCount = isFinalized ? [...selected].filter((id) => actualSet.has(id)).length : 0
 
@@ -38,14 +38,14 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
     if (locked) return
     const next = new Set(selected)
     if (next.has(groupId)) next.delete(groupId)
-    else if (next.size < MAX_PICKS) next.add(groupId)
+    else if (next.size < maxPicks) next.add(groupId)
     setSelected(next)
     onSelectionChange?.([...next])
     setStatus("idle")
   }
 
   function handleSave() {
-    if (selected.size !== MAX_PICKS) return
+    if (selected.size !== maxPicks) return
     setStatus("saved")
     onSaveSuccess?.()
 
@@ -54,7 +54,7 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
     })
   }
 
-  const remaining = MAX_PICKS - selected.size
+  const remaining = maxPicks - selected.size
 
   return (
     <div className="space-y-6">
@@ -64,15 +64,15 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
             Third-Place Qualifiers
             {isFinalized && (
               <span className={`text-xs font-bold tabular-nums ${correctCount > 0 ? "text-[#3CAC3B]" : "text-[#474A4A]"}`}>
-                {correctCount}/8 pts
+                {correctCount}/{maxPicks} pts
               </span>
             )}
           </h2>
           <p className="text-[#D1D4D1]/60 text-sm mt-0.5">
-            Select 8 of the 12 third-place finishers you predict will advance to the Round of 32.
+            Select {maxPicks} of the {groups.length} third-place finishers you predict will advance to the knockout stage.
           </p>
           <p className="text-[#D1D4D1]/70 text-xs mt-1">
-            In 2026, every group produces a 3rd-place team — but only the 8 with the best records across all groups qualify. You score points for each group you correctly include or exclude.
+            Every group produces a 3rd-place team — but only the {maxPicks} with the best records across all groups qualify. You score points for each group you correctly include or exclude.
           </p>
         </div>
 
@@ -90,7 +90,7 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
             )}
             <Button
               onClick={handleSave}
-              disabled={selected.size !== MAX_PICKS}
+              disabled={selected.size !== maxPicks}
               className="bg-[#E61D25] hover:bg-[#CC1920] text-white disabled:opacity-40"
             >
               <Save className="w-4 h-4 mr-2" /> Save picks
@@ -104,7 +104,7 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
       {/* Progress dots */}
       <div className="flex items-center gap-3">
         <div className="flex-1 flex gap-1.5">
-          {Array.from({ length: MAX_PICKS }).map((_, i) => (
+          {Array.from({ length: maxPicks }).map((_, i) => (
             <div
               key={i}
               className={`h-1.5 flex-1 rounded-full transition-colors ${
@@ -114,7 +114,7 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
           ))}
         </div>
         <span className={`text-sm shrink-0 ${remaining === 0 ? "text-[#3CAC3B]" : "text-[#D1D4D1]/60"}`}>
-          {remaining === 0 ? "8/8 ✓" : `${selected.size}/8`}
+          {remaining === 0 ? `${maxPicks}/${maxPicks} ✓` : `${selected.size}/${maxPicks}`}
         </span>
       </div>
 
@@ -122,7 +122,7 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {groups.map((group) => {
           const isSelected = selected.has(group.id)
-          const isDisabled = !isSelected && selected.size >= MAX_PICKS
+          const isDisabled = !isSelected && selected.size >= maxPicks
           const wasCorrect = isFinalized && isSelected && actualSet.has(group.id)
           const wasWrong = isFinalized && isSelected && !actualSet.has(group.id)
 
@@ -183,7 +183,7 @@ export function ThirdPlacePicker({ predictionId, groups, savedGroupIds, locked, 
       </div>
 
       <p className="text-[#474A4A] text-xs">
-        In the 2026 format, the 8 best-performing third-place teams advance to the Round of 32.
+        The {maxPicks} best-performing third-place teams advance to the knockout stage.
         Scored after the group stage concludes.
       </p>
     </div>

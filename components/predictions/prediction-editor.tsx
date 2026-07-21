@@ -39,6 +39,8 @@ type Props = {
   savedStandings: Record<string, Record<string, number>>
   savedPicksMap: Record<string, { predictedWinnerId: string | null; isDraw: boolean }>
   savedThirdPlaceGroupIds: string[]
+  // How many groups' 3rd-place teams advance (World Cup 2026: 8 of 12; Euro: 4 of 6)
+  thirdPlaceQualifiers: number
   standingsTotal: number
   matchTotal: number
   pointsByMatch?: Record<string, number>
@@ -261,6 +263,7 @@ export function PredictionEditor({
   savedStandings,
   savedPicksMap,
   savedThirdPlaceGroupIds,
+  thirdPlaceQualifiers,
   standingsTotal,
   matchTotal,
   pointsByMatch = {},
@@ -307,7 +310,7 @@ export function PredictionEditor({
   function firstIncompleteTab(): TabValue {
     if (Object.keys(savedPicksMap).length < matchTotal) return "matches"
     if (Object.values(savedStandings).reduce((s, g) => s + Object.keys(g).length, 0) < standingsTotal) return "standings"
-    if (savedThirdPlaceGroupIds.length < 8) return "thirdplace"
+    if (savedThirdPlaceGroupIds.length < thirdPlaceQualifiers) return "thirdplace"
     return "ko"
   }
 
@@ -348,7 +351,7 @@ export function PredictionEditor({
   // Overall completion — based on what has been saved to the DB.
   // When KO bracket is locked, group-only items are the 100% target. When Window 2
   // opens and KO unlocks, the bar resets to ~80% (group items / total items).
-  const groupOnlyTotal = matchTotal + standingsTotal + 8
+  const groupOnlyTotal = matchTotal + standingsTotal + thirdPlaceQualifiers
   const savedGroupItems = savedMatchCount + savedStandingsCount + savedThirdPlaceCount
   const savedItems = savedGroupItems + savedKOCount
   const effectiveTotal = koLocked ? groupOnlyTotal : groupOnlyTotal + koMatches.length
@@ -422,7 +425,7 @@ export function PredictionEditor({
           {[
             { label: "Match Results",   saved: savedMatchCount,       total: matchTotal,        filled: filledPicks },
             { label: "Group Standings", saved: savedStandingsCount,   total: standingsTotal,    filled: savedStandingsCount },
-            { label: "Third Place",     saved: savedThirdPlaceCount,  total: 8,                 filled: thirdPlaceGroupIds.size },
+            { label: "Third Place",     saved: savedThirdPlaceCount,  total: thirdPlaceQualifiers, filled: thirdPlaceGroupIds.size },
             { label: "KO Bracket",      saved: savedKOCount,          total: koMatches.length,  filled: filledKO },
           ].map(({ label, saved, total, filled }) => {
             const savedDone = saved === total
@@ -492,7 +495,7 @@ export function PredictionEditor({
         >
           <span className="sm:hidden">3rd Place</span>
           <span className="hidden sm:inline">Third Place</span>
-          {badge(thirdPlaceGroupIds.size, 8)}
+          {badge(thirdPlaceGroupIds.size, thirdPlaceQualifiers)}
         </TabsTrigger>
 
         <TabsTrigger
@@ -542,10 +545,11 @@ export function PredictionEditor({
           predictionId={predictionId}
           groups={groupsWithThird}
           savedGroupIds={savedThirdPlaceGroupIds}
+          maxPicks={thirdPlaceQualifiers}
           locked={locked}
           onSelectionChange={handleThirdPlaceChange}
           onSaveSuccess={() => {
-            setSavedThirdPlaceCount(8)
+            setSavedThirdPlaceCount(thirdPlaceQualifiers)
             setActiveTab("ko")
           }}
           actualQualifiedGroupIds={actualThirdPlaceGroupIds}

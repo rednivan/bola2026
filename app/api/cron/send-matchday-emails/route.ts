@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { findActiveTournament } from "@/lib/tournament"
 import { sendMatchdayEmail, matchdayDateString, getMatchdayContext, type LeagueTableRow } from "@/lib/emails/daily-results"
 
 const JOB = "send-matchday-emails"
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const tournament = await prisma.tournament.findUnique({ where: { year: 2026 } })
+    const tournament = await findActiveTournament()
     if (!tournament) {
       await prisma.cronLog.create({ data: { job: JOB, ok: true, message: "No tournament found" } })
       return NextResponse.json({ ok: true, message: "No tournament found", sent: 0 })
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
 
     const byDate = new Map<string, { total: number; completed: number }>()
     for (const m of allMatches) {
-      const date = matchdayDateString(m.kickoff)
+      const date = matchdayDateString(m.kickoff, tournament.matchdayTzOffsetHours)
       const entry = byDate.get(date) ?? { total: 0, completed: 0 }
       entry.total++
       if (m.homeScore !== null) entry.completed++

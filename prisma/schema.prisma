@@ -78,6 +78,20 @@ model Tournament {
   totalTeams  Int @default(48)
   totalGroups Int @default(12)
 
+  // football-data.org competition code used by lib/sync.ts (World Cup = "WC", Euros = "EC")
+  apiCompetitionCode String @default("WC")
+  // How many of the best group-3rd-place teams advance to the knockout stage
+  // (World Cup 2026: 8 of 12; Euro: 4 of 6)
+  thirdPlaceQualifiers Int @default(8)
+  // The first knockout round populated directly from synced fixtures — every
+  // later round cascades from user picks feeding into this one. World Cup
+  // 2026 has a Round of 32; Euro's 24-team format starts straight at R16.
+  koBaseStage Stage @default(R32)
+  // Hours to add to UTC kickoff times when grouping matches into "matchday" email
+  // batches, so a match date lines up with viewers' local evening (e.g. US Eastern
+  // during summer = -4; Central Europe during summer = +2).
+  matchdayTzOffsetHours Int @default(-4)
+
   createdAt DateTime @default(now())
 
   groups      TournamentGroup[]
